@@ -55,12 +55,26 @@ async function download(url, type, signal) {
         const args = ['--ignore-config','--no-playlist','--no-exec','--no-write-thumbnail','--max-filesize', String(config.maxMediaBytes), '--socket-timeout','20','--retries','3','--restrict-filenames','--js-runtimes','node','--print','after_move:filepath','-o', path.join(directory, '%(title).80s.%(ext)s')];
         if (hasCookieForHost(config.ytdlpCookiesPath, targetHost)) args.push('--cookies', config.ytdlpCookiesPath);
         if (type === 'audio') args.push('-f','bestaudio/best','-x','--audio-format','mp3');
-        else args.push('-f','bestvideo[height<=1080]+bestaudio/best[height<=1080]/best','--recode-video','mp4');
+        else args.push('-f','bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4][vcodec^=avc]/best[height<=1080][ext=mp4]/best[ext=mp4]/bestvideo[height<=1080]+bestaudio/best','--merge-output-format','mp4');
         args.push('--', targetUrl);
         await run(config.ytdlpPath || 'yt-dlp', args, {signal});
         const files = fs.readdirSync(directory).filter(x => x.endsWith(type === 'audio' ? '.mp3' : '.mp4'));
         if (!files.length) throw new Error('Nenhum arquivo disponível dentro do limite.');
         const filePath = path.join(directory, files[0]);
+        if (type !== 'audio') {
+            try {
+                const probe = await run('ffprobe', ['-v','error','-select_streams','v:0','-show_entries','stream=codec_name','-of','default=noprint_wrappers=1:nokey=1',filePath], {signal, timeout: 15000});
+                const codec = (probe.stdout || '').trim().toLowerCase();
+                if (codec && codec !== 'h264') {
+                    const fixedPath = path.join(directory, `h264_${files[0]}`);
+                    await run(config.ffmpegPath || 'ffmpeg', ['-hide_banner','-loglevel','error','-y','-i',filePath,'-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k','-movflags','+faststart',fixedPath], {signal, timeout: 120000});
+                    if (fs.existsSync(fixedPath) && fs.statSync(fixedPath).size > 0) {
+                        fs.unlinkSync(filePath);
+                        fs.renameSync(fixedPath, filePath);
+                    }
+                }
+            } catch (_) {}
+        }
         const fileName = path.basename(filePath);
         const sizeMb = (fs.statSync(filePath).size / 1048576).toFixed(2);
         if (fs.statSync(filePath).size > config.maxMediaBytes) throw new Error('O arquivo excede o limite de envio.');
