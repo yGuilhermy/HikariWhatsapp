@@ -20,7 +20,7 @@
     <a href="docs/content_pt/README.md">
       <img src="https://img.shields.io/badge/Português-BR-blue?style=for-the-badge" alt="Português">
     </a>
-    <a href="https://github.com/yGuilhermy/Hikari">
+    <a href="https://github.com/yGuilhermy/HikariDiscord">
       <img src="https://img.shields.io/badge/Fork%20de-Hikari%20(Discord)-7289da?style=for-the-badge&logo=discord&logoColor=white" alt="Original Discord">
     </a>
     <a href="LICENSE">
@@ -67,8 +67,8 @@ Se você prefere fazer tudo na mão (Ubuntu/Linux recomendado):
 1.  **Clone meu código**:
 
     ```bash
-    git clone https://github.com/yGuilhermy/HikariZap.git
-    cd HikariZap
+    git clone https://github.com/yGuilhermy/HikariWhatsapp.git
+    cd HikariWhatsapp
     ```
 
 2.  **Instale os módulos**:
@@ -148,7 +148,7 @@ Para guias detalhados, dicas de configuração e funcionamento técnico, consult
 - [🛡️ **Segurança & Moderação**](./docs/content_pt/MODERATION.md): Proteção de dados, sanitização de logs e controles de taxa.
 - [🖼️ **Figurinhas & Mídia**](./docs/content_pt/MEDIA.md): Motor Sharp/FFmpeg de stickers 512×512 e músicas Deezer.
 - [🎙️ **Sistema Vocal & Transcrição**](./docs/content_pt/VOICE.md): Transcrição Whisper, síntese neural TTS e tutoriais de deploy.
-- [🌌 **Repositório Original (Discord)**](https://github.com/yGuilhermy/Hikari): Repositório original de onde nasceu o projeto.
+- [🌌 **Repositório Original (Discord)**](https://github.com/yGuilhermy/HikariDiscord): Repositório original de onde nasceu o projeto.
 
 ---
 
@@ -165,7 +165,7 @@ Quer mudar minha alma? Tudo o que é importante está em `src/config/index.js` e
 
 ### 📝 Notas do dev
 
-- A HikariZap é a versão para WhatsApp desenvolvida a partir da [Hikari original para Discord](https://github.com/yGuilhermy/Hikari).
+- A HikariZap é a versão para WhatsApp desenvolvida a partir da [Hikari original para Discord](https://github.com/yGuilhermy/HikariDiscord).
 - A Hikari é uma IA que está em desenvolvimento, então ela pode não funcionar perfeitamente em todos os casos.
 - O Baileys é utilizado como cliente de conexão ao protocolo do WhatsApp.
 - Você pode mudar o nome da Hikari no `.env` alterando `BOT_NAME`!

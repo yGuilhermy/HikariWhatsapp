@@ -56,8 +56,8 @@ Na raiz do projeto existem scripts prontos que automatizam a verificação do am
 
 1. **Clonar o Repositório:**
    ```bash
-   git clone https://github.com/yGuilhermy/HikariZap.git
-   cd HikariZap
+   git clone https://github.com/yGuilhermy/HikariWhatsapp.git
+   cd HikariWhatsapp
    ```
 
 2. **Instalar Dependências do Node.js:**

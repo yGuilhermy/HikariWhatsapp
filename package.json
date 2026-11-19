@@ -5,12 +5,12 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yGuilhermy/HikariZap.git"
+    "url": "https://github.com/yGuilhermy/HikariWhatsapp.git"
   },
   "bugs": {
-    "url": "https://github.com/yGuilhermy/HikariZap/issues"
+    "url": "https://github.com/yGuilhermy/HikariWhatsapp/issues"
   },
-  "homepage": "https://github.com/yGuilhermy/HikariZap#readme",
+  "homepage": "https://github.com/yGuilhermy/HikariWhatsapp#readme",
   "scripts": {
     "start": "node index.js",
     "test": "node --test tests/zap/*.test.js",

@@ -1,6 +1,6 @@
 # 📚 Documentação Oficial da Hikari (WhatsApp Edition)
 
-Bem-vindo à documentação oficial da **HikariZap**, a versão para WhatsApp desenvolvida como fork autônomo da [Hikari original para Discord](https://github.com/yGuilhermy/Hikari).
+Bem-vindo à documentação oficial da **HikariZap**, a versão para WhatsApp desenvolvida como fork autônomo da [Hikari original para Discord](https://github.com/yGuilhermy/HikariDiscord).
 
 Aqui você encontrará todos os guias técnicos, manuais de configuração, referência de comandos, especificações de arquitetura e instruções para hospedar e personalizar a sua própria instância da Hikari.
 
@@ -24,7 +24,7 @@ Aqui você encontrará todos os guias técnicos, manuais de configuração, refe
 
 ## 🌐 Informações de Comunidade e Código
 
-- **Repositório do Fork (WhatsApp):** [https://github.com/yGuilhermy/HikariZap](https://github.com/yGuilhermy/HikariZap)
-- **Repositório Pai (Discord):** [https://github.com/yGuilhermy/Hikari](https://github.com/yGuilhermy/Hikari)
+- **Repositório do Fork (WhatsApp):** [https://github.com/yGuilhermy/HikariWhatsapp](https://github.com/yGuilhermy/HikariWhatsapp)
+- **Repositório Pai (Discord):** [https://github.com/yGuilhermy/HikariDiscord](https://github.com/yGuilhermy/HikariDiscord)
 - **Servidor Oficial no Discord:** [https://discord.gg/NXwKvKNKCd](https://discord.gg/NXwKvKNKCd)
 - **Licença:** Distribuído sob a licença [GNU AGPLv3](../../LICENSE).
