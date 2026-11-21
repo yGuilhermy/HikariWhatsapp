@@ -62,7 +62,7 @@ Na raiz do projeto existem scripts prontos que automatizam a verificação do am
 
 2. **Instalar Dependências do Node.js:**
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **(Opcional) Ambiente Virtual Python para Deezer:**
@@ -146,3 +146,7 @@ node index.js
 ---
 
 [🏠 Voltar ao Menu Principal](./README.md)
+
+## Recuperação de conexão
+
+Em uma queda temporária, o bot tenta reconectar com a sessão existente. Se a sessão for substituída, encerrada ou restringida, o bot para e preserva os arquivos. Confira **Aparelhos conectados** no WhatsApp e se outra instância está usando a mesma sessão antes de reiniciar.
