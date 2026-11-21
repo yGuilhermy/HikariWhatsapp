@@ -19,6 +19,8 @@ A HikariZap dispõe de recursos completos de voz: transcreve mensagens de áudio
 
 Envie o comando em resposta direta à mensagem de áudio ou anexe o áudio à mensagem com o comando. Encaminhar o áudio e depois enviar o comando em outra mensagem não o vincula. A transcrição precisa de um provedor configurado.
 
+O FFmpeg prepara até os primeiros **60 segundos** de cada áudio, em WAV mono a 16 kHz. Se um serviço falhar, o bot pode tentar o próximo provedor configurado.
+
 A ordem de tentativa, entre os serviços habilitados, é Groq, Wit.ai, Gemini, Hugging Face, OpenAI e Whisper local.
 
 ---

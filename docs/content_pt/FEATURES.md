@@ -42,10 +42,10 @@ O processamento cognitivo da Hikari opera por meio de uma **Fila de Mensagens Se
 O sistema de figurinhas (`src/services/stickerService.js`) foi construído do zero utilizando **Sharp** e **FFmpeg**:
 
 - **Proporção Perfeita (Sem Distorção):** As imagens são redimensionadas para a moldura quadrada padrão de 512×512 com preenchimento transparente (padding), preservando a proporção original do conteúdo horizontal ou vertical.
-- **Vídeos e GIFs Animados:** Converte vídeos curtos, GIFs e gravações de até 10 segundos em figurinhas animadas em formato WebP a 24 quadros por segundo.
+- **Vídeos e GIFs animados.** Processa até os primeiros 10 segundos em WebP. Se o resultado não couber em 500 KiB, use um trecho mais curto ou simples.
 - **Injeção de Metadados EXIF:** Cada sticker recebe metadados com pacote e autor configuráveis nos metadados técnicos do WhatsApp.
 - **Reversão (`>toimg` / `>sticker2image`):**
-  - Figurinhas estáticas são convertidas de volta para imagens PNG transparentes de alta fidelidade.
+  - Figurinhas estáticas são convertidas para PNG com fundo branco nas áreas transparentes.
   - Figurinhas animadas são desempacotadas e reconstruídas como arquivos `.gif` com todos os frames preservados.
 
 ---

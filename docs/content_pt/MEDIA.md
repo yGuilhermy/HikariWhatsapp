@@ -27,12 +27,12 @@ O módulo `src/services/stickerService.js` resolve o problema comum de figurinha
 5. **Injeção de Metadados EXIF:** Os blocos de metadados do WhatsApp são anexados ao WebP, identificando o pacote e a autoria.
 
 ### Tratamento de Figurinhas Animadas (Vídeos e GIFs):
-1. **Filtro de Duração:** Vídeos de até 10 segundos são aceitos.
+1. **Duração.** O bot processa até os primeiros 10 segundos do vídeo ou GIF.
 2. **Processamento via FFmpeg:**
    - Redimensionamento proporcional para caber dentro da caixa delimitadora de 512×512 pixels.
    - Aplicação de preenchimento (`pad=512:512:(512-iw)/2:(512-ih)/2:color=black@0.0`) com transparência total.
-   - Ajuste de taxa de quadros (framerate) para 24 fps e codificação contínua em loop.
-3. **Controle de Tamanho:** O arquivo WebP final é gerado com otimização de compressão para ficar rigorosamente abaixo do limite de 1 MB exigido pelo WhatsApp.
+   - O FFmpeg tenta 15, 12, 10 ou 8 quadros por segundo e grava o WebP em loop.
+3. **Tamanho de saída.** O limite é 500 KiB para figurinhas animadas e 100 KiB para estáticas. Se a compressão não atingir o limite, o comando falha.
 
 ---
 
@@ -40,8 +40,8 @@ O módulo `src/services/stickerService.js` resolve o problema comum de figurinha
 
 Ao responder a uma figurinha no chat com o comando `>toimg` (ou `>sticker2image`):
 
-- **Stickers Estáticos:** São decodificados pelo Sharp e convertidos para o formato **PNG** nativo de alta qualidade com canal alfa transparente preservado.
-- **Stickers Animados:** O FFmpeg decompõe todos os quadros do WebP animado e reconstrói um arquivo **GIF** autêntico, permitindo que os usuários salvem a animação em qualquer dispositivo ou compartilhem fora do WhatsApp.
+- **Estática.** O Sharp exporta um PNG com fundo branco nas áreas transparentes.
+- **Animada.** O Sharp exporta os quadros como GIF em loop, também com fundo branco.
 
 ---
 
