@@ -17,22 +17,15 @@ A HikariZap dispõe de recursos completos de voz: transcreve mensagens de áudio
 
 ## 👂 1. Transcrição de Áudio sob Demanda (STT Whisper)
 
-Ao citar ou encaminhar um áudio com o comando `>transcrever`, o módulo `src/services/sttService.js` entra em ação:
+Envie o comando em resposta direta à mensagem de áudio ou anexe o áudio à mensagem com o comando. Encaminhar o áudio e depois enviar o comando em outra mensagem não o vincula. A transcrição precisa de um provedor configurado.
 
-### Ordem de Fallback do STT:
-1. **Groq Cloud (Whisper Turbo):** Se configurado `GROQ_API_KEY`, utiliza o modelo `whisper-large-v3-turbo` na infraestrutura de LPU da Groq, transcrevendo em menos de 800 milissegundos.
-2. **Wit.ai (Meta):** Fallback gratuito e de alta velocidade via token `WITAI_TOKEN`.
-3. **OpenAI Oficial:** Acionado se configurado `OPENAI_STT_KEY`.
-4. **Hugging Face / Servidor Local:** Se configurado `HF_STT_URL` ou `LOCAL_STT_URL`.
-
-### Download Seguro Anti-403:
-O download de áudios hospedados em servidores de mídia do WhatsApp implementa User-Agent moderno e cabeçalhos adequados para evitar bloqueios HTTP 403.
+A ordem de tentativa, entre os serviços habilitados, é Groq, Wit.ai, Gemini, Hugging Face, OpenAI e Whisper local.
 
 ---
 
 ## 🗣️ 2. Síntese Vocal Neural e Respostas em Áudio (TTS)
 
-A Hikari pode responder diretamente com notas de voz no WhatsApp utilizando o comando `>audio <pergunta>` ou a ferramenta `text_to_speech`:
+A Hikari pode responder diretamente com notas de voz no WhatsApp utilizando o comando `>audio <pergunta>` ou o atalho `. <pergunta>`:
 
 - **Formato Nativo WhatsApp (PTT):** O áudio é sintetizado em WAV, convertido para Opus em container OGG e transmitido com a flag `ptt: true` do Baileys, exibindo o microfone verde oficial de nota de voz gravada.
 - **Voz Neural Expressiva:** Utiliza o modelo XTTS v2 treinado para português brasileiro, mantendo entonação rica e naturalidade de conversa humana.

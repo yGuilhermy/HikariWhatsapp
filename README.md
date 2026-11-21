@@ -43,7 +43,7 @@ Eu não sou apenas um bot de chat comum! Eu sou uma **Agente Autônoma** capaz d
 - **🎨 Ateliê de Arte**: Posso gerar imagens incríveis usando Pollinations ou Stability AI. Basta pedir! (`>imagem`).
 - **💱 Mestre das Finanças**: Converto moedas e criptomoedas (BTC, USD, BRL) em tempo real com cotações oficiais e sem cache desatualizado (`>moeda`).
 - **🎙️ Assistente de Voz & Respostas em Áudio**: Converse comigo no WhatsApp e receba respostas faladas em áudio natural (`>audio`), ou peça para eu ler qualquer texto em voz alta (`>falar`).
-- **🎙️ Transcrição de Áudio no Chat**: Transcrevo mensagens de voz e áudios recebidos sob demanda via Whisper (`>transcrever`).
+- **🎙️ Transcrição de Áudio no Chat**: Transcrevo áudios anexados ou citados quando há um provedor de transcrição configurado (`>transcrever`).
 - **🔍 Visão & Identificação de Anime**: Reconheço cenas e animes a partir de imagens anexadas (`>anime`).
 - **⚡ Agente Autônoma & Function Calling**: Você não precisa decorar comandos! Pode conversar comigo naturalmente pelo WhatsApp e eu decido e executo as ferramentas certas sozinha.
 
@@ -109,29 +109,23 @@ Se você prefere fazer tudo na mão (Ubuntu/Linux recomendado):
 - **No Privado:** Basta mandar uma mensagem diretamente para mim, sem prefixo!
 - **Em Grupos:** Diga "Hikari", mencione minha conta, responda a uma mensagem minha ou utilize o prefixo `>` (ou `/`):
 
-| Comando | O que faz |
-|---|---|
-| `>pesquisa <assunto>` | Pesquisa na web em tempo real e resume os resultados |
-| `>imagem <descrição>` | Gera imagens com inteligência artificial |
-| `>sticker [descrição]` | Converte imagem, GIF ou vídeo de até 10s em figurinha 512×512 |
-| `>figurinha [descrição]` | Alias para o comando de figurinhas |
-| `>toimg` / `>sticker2image` | Transforma figurinha de volta em imagem PNG ou GIF |
-| `>audio <pergunta>` | Responde à sua pergunta diretamente com áudio de voz |
-| `>falar <texto>` | Fala o texto solicitado em voz alta |
-| `>transcrever` | Transcreve o áudio citado ou anexado |
-| `>baixar_audio <URL>` | Baixa o áudio de links da internet |
-| `>baixar_video <URL>` | Baixa vídeos de links suportados |
-| `>torrent <nome>` | Busca repacks de jogos (DODI / FitGirl) |
-| `>torrent <número>` | Envia o magnet da busca citada ou da última realizada |
-| `>musica <nome e artista>` | Baixa faixas de música via Deezer |
-| `>anime` | Identifica a cena e o anime de imagem anexada |
-| `>steam <nome>` | Consulta preços, detalhes e links na Steam |
-| `>moeda <valor> <DE> <PARA>` | Converte moedas e criptomoedas em tempo real |
-| `>limpar` | Limpa o contexto recente da conversa (15 mensagens) |
-| `>ajuda` | Mostra a lista rápida de comandos |
-| `>termos` | Exibe informações sobre processamento e contexto |
+Veja todos os comandos, aliases e permissões na [referência de comandos](./docs/content_pt/COMMANDS.md).
 
-_👑 Comandos de Administrador (Owner): `>pausar`, `>retomar`, `>fila`._
+| Comando e aliases | O que faz |
+| :--- | :--- |
+| `>audio <pergunta>` | Pede uma resposta em nota de voz. Também dá para começar a pergunta com um ponto. |
+| `>falar <texto>` | Lê em voz alta o texto informado. |
+| `>transcrever` | Anexe um áudio ou envie o comando em resposta direta à mensagem de áudio. Precisa de um provedor de transcrição configurado. Sem áudio, o pedido falha. |
+| `>sticker [descrição]`, `>figurinha` | Cria uma figurinha de 512 × 512 sem cortar a imagem. Aceita imagens, GIFs ou vídeos de até 10 segundos e descrição opcional de até 128 caracteres. |
+| `>sticker2image`, `>toimg` | Converte uma figurinha estática em PNG ou uma animada em GIF. |
+| `>musica <nome e artista>`, `>baixar_musica_deezer` | Busca uma faixa no Deezer e envia o áudio. Para extrair áudio de um link, use >baixar_audio. |
+| `>baixar_video <link>` | Baixa o vídeo de um link compatível e envia em MP4. |
+| `>view [--dm]`, `>ver` | Reenvia texto ou mídia. Em grupos, use --dm para receber no privado. |
+| `>cancelar`, `>parar` | Interrompe pedidos do chat. Quando usado pelo dono, cancela pedidos de todos os chats. |
+| `>limpar`, `>hdel` | Apaga o contexto recente da conversa. Em grupo, só o dono do bot pode usar. |
+| `>ajuda`, `>help` | Mostra o menu de ajuda. |
+
+_Controle da fila: somente o dono pode usar >pausar, >retomar e >fila._
 
 ---
 

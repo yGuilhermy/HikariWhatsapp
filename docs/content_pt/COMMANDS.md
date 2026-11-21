@@ -1,148 +1,60 @@
-# 🎮 Guia Completo de Comandos (WhatsApp Edition)
+# Comandos da HikariZap
 
-Este documento descreve detalhadamente todos os comandos disponíveis na HikariZap, suas sintaxes, parâmetros aceitos e permissões de acesso.
+Use o prefixo configurado (o padrão é >) ou /. Em grupo, você também pode mencionar a Hikari, chamá-la pelo nome ou responder a uma mensagem dela.
 
----
+Comece a pergunta com um ponto para receber a resposta em nota de voz.
 
-## 📂 Sumário
+## Conversa, voz e leitura
 
-1. [⌨️ 1. Prefixos e Formato de Entrada](#-1-prefixos-e-formato-de-entrada)
-2. [🧠 2. IA, Fala e Transcrição](#-2-ia-fala-e-transcrição)
-3. [🖼️ 3. Figurinhas e Processamento de Imagens](#-3-figurinhas-e-processamento-de-imagens)
-4. [🎮 4. Jogos, Torrents e Consultas](#-4-jogos-torrents-e-consultas)
-5. [🎵 5. Downloads de Mídia e Música](#-5-downloads-de-mídia-e-música)
-6. [🛠️ 6. Comandos Utilitários de Chat](#-6-comandos-utilitários-de-chat)
-7. [👑 7. Comandos de Administração (Owner Only)](#-7-comandos-de-administração-owner-only)
-8. [💡 Dicas de Especialista](#-dicas-de-especialista)
-
----
-
-## ⌨️ 1. Prefixos e Formato de Entrada
-
-- **Prefixo Principal:** `>` (exemplo: `>ajuda`, `>sticker`).
-- **Prefixo Alternativo:** `/` (exemplo: `/ajuda`, `/sticker`).
-- **Linguagem Natural (Zero Prefixo):** Em chats privados ou ao chamar por "Hikari" em grupos, você pode formular pedidos livres como *"Hikari, pesquise o clima hoje"* ou *"Faz figurinha disso"*, citando a imagem.
-
----
-
-## 🧠 2. IA, Fala e Transcrição
-
-### `>pesquisa <assunto>`
-Pesquisa na internet em tempo real e entrega um resumo direto no chat.
-- **Exemplo:** `>pesquisa novidades do lançamento do GTA 6`
-
-### `>imagem <descrição>`
-Gera imagens artísticas com inteligência artificial via Pollinations ou Stability AI.
-- **Exemplo:** `>imagem uma cidade cyberpunk à noite sob chuva neon, 4k`
-
-### `>audio <pergunta>`
-Pergunta algo para a Hikari e recebe a resposta sintetizada em áudio de voz natural no WhatsApp (PTT).
-- **Exemplo:** `>audio me conte uma curiosidade sobre o espaço`
-
-### `>falar <texto>`
-Lê em voz alta o texto enviado, gerando um arquivo de áudio falado.
-- **Exemplo:** `>falar bom dia grupo, que todos tenham uma excelente semana!`
-
-### `>transcrever`
-Transcreve o áudio anexado ou uma mensagem de voz que você esteja respondendo (quote/reply).
-- **Uso:** Responda a um áudio com o comando `>transcrever`.
-
----
-
-## 🖼️ 3. Figurinhas e Processamento de Imagens
-
-### `>sticker [descrição]` / `>figurinha [descrição]`
-Converte imagens, fotos, GIFs ou vídeos de até 10 segundos em figurinhas do WhatsApp (512×512) com transparência perfeita e sem cortes distorcidos.
-- **Uso:** Envie uma foto/vídeo com a legenda `>sticker` ou responda a uma foto existente no chat. A descrição opcional define o texto embutido nos metadados do pacote.
-
-### `>toimg` / `>sticker2image`
-Converte uma figurinha recebida de volta para formato de imagem:
-- **Figurinha Estática:** Retorna um arquivo PNG transparente com alta resolução.
-- **Figurinha Animada:** Converte para um arquivo `.gif` completo com todos os frames preservados.
-- **Uso:** Responda a uma figurinha no chat com o comando `>toimg`.
-
-### `>anime`
-Identifica a origem de uma cena de anime a partir de um print ou imagem.
-- **Uso:** Envie uma imagem com a legenda `>anime` ou responda a uma imagem com o comando.
-- **Retorno:** Nome do anime, episódio e minutagem aproximada da cena.
-
----
-
-## 🎮 4. Jogos, Torrents e Consultas
-
-### `>torrent <nome>` / `>buscar_jogo <nome>`
-Busca repacks de jogos nos catálogos locais da FitGirl e DODI.
-- **Exemplo:** `>torrent Dark Souls 3`
-- **Retorno:** Uma lista numerada de até 5 resultados contendo título, tamanho e data.
-
-### `>torrent <número>` (ou apenas o número em resposta)
-Seleciona o item da busca anterior ou citada e envia o arquivo de texto `.txt` com o magnet link validado.
-- **Exemplo:** Responda à lista da Hikari digitando apenas `1` ou `>torrent 1`.
-- **Duração:** A lista fica indexada em memória por 10 minutos vinculada ao seu remetente.
-
-### `>steam <nome>`
-Consulta os dados oficiais de um jogo na loja da Steam.
-- **Exemplo:** `>steam Portal 2`
-- **Retorno:** Preço atual, desconto, desenvolvedora, plataformas e breve comentário da IA.
-
-### `>moeda <valor> <DE> <PARA>`
-Converte valores entre moedas fiduciárias ou criptomoedas em tempo real.
-- **Exemplo:** `>moeda 50 USD BRL`
-- **Exemplo Cripto:** `>moeda 1 BTC USD`
-- **Retorno:** Valor convertido, cotação utilizada, fonte oficial e data do registro.
-
----
-
-## 🎵 5. Downloads de Mídia e Música
-
-### `>musica <nome e artista>`
-Busca e faz o download de faixas de estúdio em alta qualidade (HQ MP3 / 320kbps) direto pelo catálogo Deezer via `deemix`.
-- **Exemplo:** `>musica Bohemian Rhapsody Queen`
-- **Retorno:** Arquivo de áudio MP3 enviado no chat com metadados e capa.
-
-### `>baixar_audio <URL>`
-Extrai e converte a trilha sonora de vídeos e áudios da internet para formato de áudio.
-- **Exemplo:** `>baixar_audio https://www.youtube.com/watch?v=...`
-
-### `>baixar_video <URL>`
-Baixa vídeos da internet (YouTube Shorts, Instagram Reels, TikTok, Twitter/X) e envia diretamente no chat.
-- **Exemplo:** `>baixar_video https://www.instagram.com/reel/...`
-
----
-
-## 🛠️ 6. Comandos Utilitários de Chat
-
-### `>limpar`
-Limpa o histórico recente das 15 mensagens da conversa em memória.
-- **No Privado:** Qualquer usuário pode executar para reiniciar sua sessão.
-- **Em Grupos:** Apenas administradores do grupo ou o proprietário do bot podem acionar.
-
-### `>ajuda`
-Exibe a lista consolidada com as principais ferramentas e comandos rápidos da Hikari.
-
-### `>termos`
-Mostra detalhes transparentes sobre a política de dados, retenção de contexto e privacidade do bot.
-
----
-
-## 👑 7. Comandos de Administração (Owner Only)
-
-Estes comandos operam exclusivamente para os telefones configurados em `WHATSAPP_OWNER_NUMBERS`:
-
-| Comando | Descrição |
+| Comando e aliases | O que faz |
 | :--- | :--- |
-| `>pausar` | Congela temporariamente o atendimento da Hikari a novas mensagens de usuários. |
-| `>retomar` | Descongela o atendimento da Hikari e volta ao estado operacional normal. |
-| `>fila` | Exibe o status da fila de mensagens, tarefas ativas e tamanho do processamento atual. |
+| `>ia_chat <pergunta>` | Envia uma pergunta à Hikari por comando e recebe a resposta em texto. |
+| `>audio <pergunta>` | Pede uma resposta em nota de voz. Também dá para começar a pergunta com um ponto. |
+| `>falar <texto>` | Lê em voz alta o texto informado. |
+| `>transcrever` | Anexe um áudio ou envie o comando em resposta direta à mensagem de áudio. Precisa de um provedor de transcrição configurado. Sem áudio, o pedido falha. |
+| `>anime [link]`, `>anime_origem` | Identifica uma cena de anime por imagem anexada, citada ou por link direto da imagem. |
+| `>pesquisa <assunto>`, `>pesquisar` | Busca na web e retorna resultados com links. |
 
----
+## Figurinhas e geração de mídia
 
-## 💡 Dicas de Especialista
+| Comando e aliases | O que faz |
+| :--- | :--- |
+| `>sticker [descrição]`, `>figurinha` | Cria uma figurinha de 512 × 512 sem cortar a imagem. Aceita imagens, GIFs ou vídeos de até 10 segundos e descrição opcional de até 128 caracteres. |
+| `>sticker2image`, `>toimg` | Converte uma figurinha estática em PNG ou uma animada em GIF. |
+| `>imagem <descrição>`, `>ia_imagem` | Gera uma imagem conforme a descrição. |
+| `>musica <nome e artista>`, `>baixar_musica_deezer` | Busca uma faixa no Deezer e envia o áudio. Para extrair áudio de um link, use >baixar_audio. |
+| `>baixar_audio <link>`, `>baixar_musica` | Extrai áudio de um link compatível e envia em MP3. |
+| `>baixar_video <link>` | Baixa o vídeo de um link compatível e envia em MP4. |
 
-- 💡 **Acesso Rápido a Figurinhas:** Ao responder uma figurinha com `>toimg`, a Hikari gera a imagem em menos de 1 segundo. Se enviar uma foto com `>figurinha`, ela já é convertida diretamente.
-- 💡 **Uso em Grupos:** Para evitar excesso de mensagens em grupos movimentados, o bot ignora falas comuns entre membros e só responde quando expressamente solicitado.
+## Jogos, Steam e câmbio
 
----
+| Comando e aliases | O que faz |
+| :--- | :--- |
+| `>buscar_jogo <nome>`, `>jogo` | Busca nos catálogos locais e apresenta até cinco opções. |
+| `>torrent <nome ou número>` | Com nome, busca jogos. Com número, envia o .torrent da lista citada ou da última busca válida, ou um .txt com o magnet quando necessário. Você também pode responder à lista apenas com o número. |
+| `>steam <jogo>`, `>steam_jogo` | Consulta preço e detalhes de um jogo na Steam. |
+| `>moeda <valor> <de> <para>`, `>converter_moeda` | Converte um valor entre moedas. Exemplo: >moeda 10 USD BRL. |
 
-[🏠 Voltar ao Menu Principal](./README.md)
+## Histórico, controle e diagnóstico
 
+| Comando e aliases | O que faz |
+| :--- | :--- |
+| `>view [--dm]`, `>ver` | Reenvia texto ou mídia. Em grupos, use --dm para receber no privado. |
+| `>cancelar`, `>parar` | Interrompe pedidos do chat. Quando usado pelo dono, cancela pedidos de todos os chats. |
+| `>limpar`, `>hdel` | Apaga o contexto recente da conversa. Em grupo, só o dono do bot pode usar. |
+| `>ajuda`, `>help` | Mostra o menu de ajuda. |
+| `>telemetria`, `>diagnostico` | Mostra dados do usuário e do chat, tempo de resposta e estado do bot. |
+| `>ping` | Mostra o tempo entre receber o pedido e preparar a resposta, sem contar a entrega pelo WhatsApp. |
+| `>userinfo` | Mostra dados do usuário e da conversa, incluindo o tipo de identificador. |
+
+## Comandos exclusivos do proprietário
+
+Apenas o dono do bot pode usar estes comandos, conforme a configuração da instância.
+
+| Comando e aliases | O que faz |
+| :--- | :--- |
+| `>pausar` | Pausa o atendimento e cancela a fila. |
+| `>retomar` | Retoma o atendimento. |
+| `>fila` | Mostra quantos pedidos estão ativos, quantos aguardam e se o atendimento está pausado. |
+
+[Emojis e reações](https://projetohikari.com/docs/whatsapp/comandos/#emojis-e-reacoes) · [Voltar à documentação](./README.md)

@@ -99,7 +99,7 @@ A ferramenta `identify_anime` integra-se com a API pública do **Trace.moe**:
 
 ## 🎙️ 8. Transcrição de Voz e Respostas em Áudio
 
-- **Transcrição STT (`>transcrever`):** Ao receber uma mensagem de voz ou áudio encaminhado, a Hikari transcreve o conteúdo por meio de modelos Whisper Turbo na nuvem (Groq / Wit.ai).
+- **Transcrição com `>transcrever`:** anexe ou cite a mensagem de áudio. O bot usa os provedores de transcrição configurados.
 - **Respostas Faladas (`>audio pergunta`):** A IA gera a resposta em texto e a sintetiza imediatamente em formato de áudio natural (PTT) com voz expressiva via XTTS v2.
 - **Leitura em Voz Alta (`>falar texto`):** Lê literalmente qualquer texto informado utilizando síntese vocal.
 

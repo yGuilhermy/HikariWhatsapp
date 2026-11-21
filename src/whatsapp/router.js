@@ -14,6 +14,8 @@ function getHelpText() {
 • *No Privado:* Converse normalmente em linguagem comum.
 • *Em Grupos:* Mencione @Hikari, responda a uma mensagem minha ou me chame pelo nome.
 
+Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos comandos abaixo.
+
 *🗣️ É SÓ PEDIR, SEM COMANDO*
 • "Hikari, pesquisa sobre esse assunto" ou "quanto custa Portal 2 na Steam?"
 • "Converte 10 dólares para reais"
@@ -21,43 +23,47 @@ function getHelpText() {
 • "Cria uma imagem de um gato astronauta"
 • "Baixa esse vídeo: <link>" ou "baixa a música <nome e artista>"
 • "Busca o torrent de <jogo>" — depois escolha um resultado
-• "Lê esse texto em voz alta" ou "responde em áudio"
+• Comece a pergunta com um ponto (ex.: ". Hikari, o que é um eclipse?") para receber uma resposta em voz.
 
 *🔍 BUSCA & UTILITÁRIOS*
+• \`${p}ia_chat <pergunta>\` — Responde à pergunta em texto
 • \`${p}pesquisa <assunto>\` — Busca notícias e fatos na internet
 • \`${p}steam <jogo>\` — Preço e detalhes de jogos na Steam
 • \`${p}moeda <valor> <de> <para>\` — Conversão de moedas (ex: \`${p}moeda 10 USD BRL\`)
-• \`${p}anime\` — Identifica anime por imagem anexada ou citada
+• \`${p}anime\` — Identifica anime por imagem anexada, citada ou por link direto da imagem
 
 *🎬 MÍDIA & DOWNLOADS*
 • \`${p}view\` — Reenvia mensagem, imagem, vídeo, áudio ou sticker citado
 • \`${p}musica <nome e artista>\` — Baixa faixas pelo Deezer em áudio nativo
 • \`${p}baixar_video <link>\` — Baixa vídeos (Instagram, TikTok, YouTube, X)
 • \`${p}baixar_audio <link>\` — Extrai áudio de vídeos da internet
-• \`${p}buscar_jogo <nome>\` — Lista até 5 torrents de jogos
-• \`${p}torrent <número>\` — Envia o arquivo do resultado escolhido
+• \`${p}buscar_jogo <nome>\` — Busca jogos nos catálogos locais e lista até 5 resultados
+• \`${p}torrent <nome ou número>\` — Busca por nome ou envia o arquivo do resultado escolhido
 • \`${p}imagem <descrição>\` — Gera imagens por inteligência artificial
 • \`${p}sticker [descrição]\` — Imagem, GIF ou vídeo em figurinha (até 10 s; descrição até 128 caracteres)
-• \`${p}sticker2image\` — Figurinha estática em PNG; animada em arquivo GIF completo
+• \`${p}toimg\` ou \`${p}sticker2image\` — Converte figurinha estática em PNG ou animada em GIF
 
 *🎙️ VOZ & TRANSCRIÇÃO*
-• \`${p}falar <texto>\` — Síntese de fala literal
-• \`${p}transcrever\` — Transcreve um áudio anexado ou citado
+• \`${p}falar <texto>\` — Lê em voz alta o texto enviado
+• \`${p}transcrever\` — Converte áudio em texto. Anexe o áudio ao comando ou responda diretamente à mensagem de áudio.
 • \`${p}audio <pergunta>\` — Resposta gerada pela IA em voz
 
 *⚙️ CONTROLE DO CHAT*
 • \`${p}telemetria\` — Seus dados de sessão, latência e estado do bot
-• \`${p}ping\` — Tempo de processamento da resposta
+• \`${p}ping\` — Tempo entre receber o pedido e preparar a resposta
 • \`${p}userinfo\` — Seus dados e os da conversa
 • \`${p}cancelar\` — Interrompe qualquer operação em andamento
-• \`${p}limpar\` — Apaga o contexto de mensagens da conversa
+• \`${p}limpar\` — Apaga o contexto recente. Em grupo, só o dono pode usar.
 • \`${p}ajuda\` — Exibe este menu
 
 *👑 DONO*
-• \`${p}pausar\` | \`${p}retomar\` | \`${p}fila\`
+• \`${p}pausar\` — Pausa o atendimento e cancela a fila
+• \`${p}retomar\` — Retoma o atendimento
+• \`${p}fila\` — Mostra o estado da fila
 
 ────────────────────────
-_Dica: Você não precisa usar comandos para tudo! Pode falar naturalmente: "Hikari, pesquise as notícias de hoje" ou "baixa esse vídeo"._`;
+Comandos, aliases e reações:
+https://projetohikari.com/docs/whatsapp/comandos/`;
 }
 const HELP = getHelpText();
 const TERMS = 'Hikari Zap ativa para amigos e grupos autorizados.';
