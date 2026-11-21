@@ -1,5 +1,7 @@
 # 🛠️ Sistema de Ferramentas e Arquitetura Avançada
 
+[Catálogo por edição e exemplos de conversa](https://projetohikari.com/docs/conversa-e-funcoes/)
+
 Este guia é voltado para desenvolvedores e entusiastas que desejam entender as entranhas da HikariZap, seu transporte Baileys, o sistema local de Function Calling (Tools) e como criar novas capacidades para a IA.
 
 ---

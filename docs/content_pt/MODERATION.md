@@ -18,7 +18,7 @@ A HikariZap adota uma arquitetura orientada à privacidade, com isolamento de cr
 
 A segurança da instância começa pelo não armazenamento de informações pessoais desnecessárias:
 
-- **Sem Registro de Chats em Log:** O logger central da aplicação não grava o conteúdo de mensagens comuns, áudios transcritos ou conversas privadas nos arquivos de log.
+- **Dados nos logs.** Os registros podem incluir nome, identificador da conversa e argumentos de comandos. Restrinja o acesso aos arquivos de diagnóstico.
 - Com `SAVE_HISTORY=true`, o bot grava até 15 entradas recentes por conversa em `state.json` no diretório `WHATSAPP_DATA_DIR`. As entradas incluem mensagens e respostas usadas como contexto. `SAVE_HISTORY=false` impede novas gravações de histórico, mas os registros já salvos podem continuar disponíveis. Use `>limpar` para apagar o contexto da conversa. Em grupos, esse comando é restrito ao proprietário.
 - **Isolamento de Caches:** Arquivos temporários de mídia, stickers e downloads residem na pasta local configurada e são purgados automaticamente logo após a entrega ao WhatsApp.
 
@@ -29,8 +29,8 @@ A segurança da instância começa pelo não armazenamento de informações pess
 O sistema de logging (`src/utils/logger.js`) intercepta todas as saídas de depuração e erro antes de gravá-las no console ou nos arquivos diários em `logs/`:
 
 - **Ocultação de Chaves de API:** Qualquer string com formato de chave de API conhecida (como tokens do Gemini com prefixo `AIza...`, tokens Hugging Face `hf_...` ou tokens de bearer) é automaticamente substituída pela máscara `[REDACTED]`.
-- **Ocultação de Identificadores Sensíveis:** Telefones, LIDs e credenciais do Baileys são ocultados nas saídas de diagnóstico.
-- **QR Code Seguro:** O QR Code de pareamento é renderizado exclusivamente no terminal interativo e nunca gravado em disco ou exposto via web.
+- **Identificadores de conversa.** A máscara de credenciais não elimina todos os números ou LIDs dos registros. Revise o conteúdo antes de compartilhar logs.
+- **QR Code de pareamento.** O bot imprime o QR no terminal. Restrinja o acesso ao terminal e a qualquer coletor da saída do processo.
 
 ---
 
@@ -39,13 +39,13 @@ O sistema de logging (`src/utils/logger.js`) intercepta todas as saídas de depu
 Os comandos abaixo são restritos aos telefones autorizados no arquivo `.env` (`WHATSAPP_OWNER_NUMBERS`):
 
 ### `>pausar`
-Congela instantaneamente o atendimento da Hikari. O bot continua online no WhatsApp, mas recusa novos pedidos com aviso de manutenção.
+Cancela a fila principal e reage com ⏸️. Enquanto o atendimento está pausado, usuários comuns recebem um aviso de manutenção e o proprietário pode testar pela fila dedicada.
 
 ### `>retomar`
 Restaura a operação normal após uma pausa administrativa.
 
 ### `>fila`
-Exibe a situação da fila de trabalho: tarefas aguardando envio, processos em andamento e tempo médio de resposta.
+Mostra a quantidade de tarefas ativas e pendentes na fila principal e se ela está pausada.
 
 ---
 
@@ -61,7 +61,7 @@ O Baileys é um cliente não oficial de conexão ao protocolo do WhatsApp. Para 
 
 ## 💡 Dicas de Moderação e Segurança
 
-- 💡 **Proteção de Chip Novo:** Se estiver utilizando um número recém-cadastrado no WhatsApp, utilize-o manualmente por alguns dias antes de conectar o bot para criar reputação orgânica na rede.
+- **Limites locais.** Respeitar a cadência de envio reduz disparos consecutivos. Restrições da plataforma continuam sendo decididas pelo WhatsApp.
 - 💡 **Gestão de Grupos Grandes:** Em grupos com centenas de membros, oriente os participantes a mencionarem a Hikari apenas quando desejarem sua ajuda direta, mantendo o ambiente limpo e sem poluição.
 - 💡 **Backup Seguro:** Mantenha um backup seguro da pasta `.whatsapp-auth` em local protegido caso precise migrar de servidor.
 

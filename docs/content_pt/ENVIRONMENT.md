@@ -65,7 +65,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 | `HF_TOKEN` | *(Seu token HF)* | [Hugging Face Settings](https://huggingface.co/settings/tokens). |
 | `HF_MODEL` | `Qwen/Qwen2.5-72B-Instruct` | Modelo do Hugging Face executado como fallback se todos os Gemini falharem. |
 | `HF_API_URL` | `https://router.huggingface.co/v1/chat/completions` | Roteador de inferência do Hugging Face. |
-| `LOCAL_LLM_ENABLED` | `false` | Ativa o envio prioritário para modelos locais executados via LM Studio ou Ollama. |
+| `LOCAL_LLM_ENABLED` | `false` | Habilita um modelo local via endpoint compatível. O pool ainda prioriza Gemini. |
 | `LOCAL_LLM_URL` | `http://localhost:1234/v1/chat/completions` | URL do servidor local de IA. |
 | `LOCAL_LLM_MODEL` | `local-model` | Identificador do modelo carregado no seu servidor local. |
 | `LMSTUDIO_API_KEY` | *(Opcional)* | Chave de autorização caso seu endpoint local exija autenticação Bearer. |
@@ -143,3 +143,7 @@ Ao definir `GEMINI_API_KEY` com valores separados por vírgula, o pool alterna e
 
 [🏠 Voltar ao Menu Principal](./README.md)
 
+
+## Prazos e limites do agente
+
+`LLM_ATTEMPT_TIMEOUT_MS` deve caber em `LLM_COMPLETION_BUDGET_MS`, que deve caber em `LLM_AGENT_BUDGET_MS`. O orçamento do agente deve caber em `QUEUE_TASK_TIMEOUT_MS`. Rode `npm run config:check` antes de iniciar e consulte a [referência de variáveis](https://projetohikari.com/docs/referencia/variaveis-ambiente/) para os valores padrão.

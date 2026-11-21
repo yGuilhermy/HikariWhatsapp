@@ -1,5 +1,7 @@
 <h1 align="center">🌌 Hikari (The Silver Glare - WhatsApp Edition) ✧</h1>
 
+<p align="center"><a href="https://projetohikari.com/">Site do Projeto Hikari</a> · <a href="https://projetohikari.com/docs/whatsapp/">Documentação online</a> · <a href="https://discord.projetohikari.com/">Comunidade no Discord</a></p>
+
 <div align="center">
   <picture>
     <source
