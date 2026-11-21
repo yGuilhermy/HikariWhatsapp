@@ -60,8 +60,8 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 | `GEMINI_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | Endpoint compatível com formato OpenAI. |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Modelo principal de alta velocidade e raciocínio. |
 | `GEMINI_MODEL_FALLBACK` | `gemini-3.5-flash-lite` | Primeiro modelo de contingência caso o principal esgote a cota. |
-| `GEMINI_MODEL_FALLBACK_2`| `gemini-2.5-flash-lite` | Segundo modelo de contingência. |
-| `GEMINI_MODEL_FALLBACK_3`| `gemini-2.5-flash` | Terceiro modelo de contingência com maior capacidade analítica. |
+| `GEMINI_MODEL_FALLBACK_2`| `gemini-3.8-flash` | Segundo modelo de contingência. |
+| `GEMINI_MODEL_FALLBACK_3`| `gemini-3.7-flash` | Terceiro modelo de contingência com maior capacidade analítica. |
 | `HF_TOKEN` | *(Seu token HF)* | [Hugging Face Settings](https://huggingface.co/settings/tokens). |
 | `HF_MODEL` | `Qwen/Qwen2.5-72B-Instruct` | Modelo do Hugging Face executado como fallback se todos os Gemini falharem. |
 | `HF_API_URL` | `https://router.huggingface.co/v1/chat/completions` | Roteador de inferência do Hugging Face. |
@@ -98,6 +98,8 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 
 | Variável | Descrição | Onde Obter |
 | :--- | :--- | :--- |
+| `GROQ_CHAT_ENABLED` | Defina `true` para permitir Groq na conversa. | Configuração opcional |
+| `GROQ_CHAT_API_KEY` | Credencial dedicada para conversa com Groq. | Use uma cota separada da transcrição. |
 | `GROQ_API_KEY` | Chave da Groq para transcrição ultrarrápida via Whisper Turbo. | [Groq Cloud Console](https://console.groq.com/) |
 | `WITAI_TOKEN` | Token do aplicativo no Wit.ai para transcrição gratuita. | [Wit.ai Console](https://wit.ai/) |
 | `OPENAI_STT_KEY` | Chave oficial da OpenAI para transcrição via Whisper. | [OpenAI API Keys](https://platform.openai.com/api-keys) |
@@ -133,7 +135,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 
 ## 💡 Dicas de Especialista
 
-- 💡 **Multi-Chaves Gemini:** Ao definir `GEMINI_API_KEY=key1,key2,key3`, a Hikari consome as cotas das chaves em ordem antes de acionar os modelos de fallback, multiplicando sua capacidade gratuita diária.
+Ao definir `GEMINI_API_KEY` com valores separados por vírgula, o pool alterna entre as credenciais disponíveis. `GEMINI_MODELS` define a ordem dos modelos quando for preenchida. A cota disponível depende do projeto associado à chave.
 - 💡 **Local LLM Gratuito:** Ativar `LOCAL_LLM_ENABLED=true` com o LM Studio rodando em sua máquina permite conversar ilimitadamente com modelos open-source sem custos de API externa.
 - 💡 **Preservação de Segredos:** O arquivo `.env` nunca deve ser compartilhado ou enviado ao repositório público do GitHub. Mantenha-o sempre isolado no seu ambiente local ou servidor VPS.
 
