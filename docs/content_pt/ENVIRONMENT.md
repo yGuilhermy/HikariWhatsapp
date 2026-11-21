@@ -29,7 +29,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 | `WHATSAPP_AUTH_DIR` | `.whatsapp-auth` | Diretório onde as credenciais de sessão do Baileys são gravadas. |
 | `WHATSAPP_DATA_DIR` | `src/data/zap` | Diretório de persistência de contexto e cache técnico de identidades. |
 | `WHATSAPP_MAX_MEDIA_MB` | `16` | Limite máximo em MB para envio de mídias pelo bot (Permitido: 1 a 64). |
-| `SAVE_HISTORY` | `true` | Mantém o histórico das últimas 15 mensagens em memória para contextualizar a IA. |
+| `SAVE_HISTORY` | `true` | Grava até 15 entradas recentes por conversa em `state.json`. Desativar impede novas gravações de histórico e preserva os registros existentes. |
 
 ---
 

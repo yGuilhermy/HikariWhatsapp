@@ -19,7 +19,7 @@ A HikariZap adota uma arquitetura orientada à privacidade, com isolamento de cr
 A segurança da instância começa pelo não armazenamento de informações pessoais desnecessárias:
 
 - **Sem Registro de Chats em Log:** O logger central da aplicação não grava o conteúdo de mensagens comuns, áudios transcritos ou conversas privadas nos arquivos de log.
-- **Contexto Volátil e Limitado:** O histórico recente das conversas é mantido em memória até o limite de 15 mensagens por chat para permitir coerência conversacional. Não existem bancos de dados de histórico que acumulem conversas de longo prazo em texto aberto.
+- Com `SAVE_HISTORY=true`, o bot grava até 15 entradas recentes por conversa em `state.json` no diretório `WHATSAPP_DATA_DIR`. As entradas incluem mensagens e respostas usadas como contexto. `SAVE_HISTORY=false` impede novas gravações de histórico, mas os registros já salvos podem continuar disponíveis. Use `>limpar` para apagar o contexto da conversa. Em grupos, esse comando é restrito ao proprietário.
 - **Isolamento de Caches:** Arquivos temporários de mídia, stickers e downloads residem na pasta local configurada e são purgados automaticamente logo após a entrega ao WhatsApp.
 
 ---

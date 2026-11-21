@@ -28,7 +28,7 @@ O processamento cognitivo da Hikari opera por meio de uma **Fila de Mensagens Se
    - **No Privado:** Qualquer mensagem enviada à Hikari é direcionada ao processamento imediato.
    - **Em Grupos:** O bot só responde se for mencionado (`@número`), se a mensagem contiver o gatilho `"Hikari"`, se for uma resposta direta (quote/reply) a ela, ou se utilizar um comando explícito de prefixo `>` (ou `/`).
 2. **Contexto Deslizante (Memória Recente):**
-   - O bot mantém um histórico em memória das últimas 15 mensagens trocadas no chat (`Store`), garantindo respostas coerentes com o fluxo da conversa sem armazenar dados em texto aberto ou causar overhead desnecessário de tokens.
+   - Com `SAVE_HISTORY=true`, o bot grava até 15 entradas recentes por conversa em `state.json` no diretório `WHATSAPP_DATA_DIR`. As entradas incluem mensagens e respostas usadas como contexto. `SAVE_HISTORY=false` impede novas gravações de histórico, mas os registros já salvos podem continuar disponíveis. Use `>limpar` para apagar o contexto da conversa. Em grupos, esse comando é restrito ao proprietário.
 3. **Loop de Ferramentas (Function Calling):**
    - O modelo de linguagem recebe o catálogo de funções disponíveis em `src/data/mcp_tools.json`.
    - Se o usuário fizer uma solicitação complexa (como *"Pesquise o preço do Portal 2 na Steam e converta 10 dólares em reais"*), a IA decide por conta própria chamar `check_steam`, em seguida `convert_currency`, coleta os resultados e sintetiza uma única resposta final amigável.
