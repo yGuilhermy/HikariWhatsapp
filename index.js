@@ -20,12 +20,12 @@ if (require.main === module) {
     for (const warning of report.warnings) logger.warn(warning);
     if (report.errors.length) {
         for (const error of report.errors) logger.error(error);
-        logger.error('Corrija as variáveis indicadas no .env antes de conectar. Nenhuma tentativa de login foi feita.');
+        logger.event('error', 'fatal', 'Corrija as variáveis indicadas no .env antes de conectar. Nenhuma tentativa de login foi feita.');
         process.exitCode = 1;
     } else {
-        logger.system('Hikari Zap: configuração carregada; iniciando conexão.');
+        logger.event('system', 'starting', 'Hikari Zap: configuração carregada; iniciando conexão.');
         require('./src/whatsapp/client').start().catch(error => {
-            logger.error('Falha ao iniciar Hikari Zap:',error);
+            logger.event('error', 'fatal', error);
             process.exitCode = 1;
         });
     }

@@ -18,7 +18,7 @@ function validateConfiguration(config) {
         if(!Number.isFinite(value)||value<min||value>max||(integer&&!Number.isInteger(value))) errors.push(`${name}: informe ${integer?'um inteiro':'um número'} entre ${min} e ${max}.`);
     };
     for(const name of ['SAVE_HISTORY','LOCAL_LLM_ENABLED','WHATSAPP_NOTIFY_OWNER','ALLOW_PUBLIC_POLLINATIONS'])if(process.env[name]&&!['true','false'].includes(process.env[name])) errors.push(`${name}: use true ou false.`);
-    for(const [name,min,max,int] of [['WHATSAPP_MAX_MEDIA_MB',1,64,true],['LLM_TIMEOUT_MS',5000,120000,true],['VOICE_SPEED',0.5,2,false],['VOICE_TEMPERATURE',0,2,false],['VOICE_MAX_CHARS',1,5000,true],['LOG_RETENTION_DAYS',1,90,true],['LOG_MAX_FILE_MB',1,50,false]])number(name,min,max,int);
+    for(const [name,min,max,int] of [['WHATSAPP_MAX_MEDIA_MB',1,64,true],['LLM_TIMEOUT_MS',5000,120000,true],['VOICE_SPEED',0.5,2,false],['VOICE_TEMPERATURE',0,2,false],['VOICE_MAX_CHARS',1,5000,true]])number(name,min,max,int);
     for(const [name,min,max] of [['QUEUE_CONCURRENCY',1,4],['QUEUE_MAX_PENDING',1,100],['QUEUE_MAX_PER_CHAT',1,10],['QUEUE_WAIT_TIMEOUT_MS',1000,300000],['QUEUE_TASK_TIMEOUT_MS',5000,600000],['LLM_ATTEMPT_TIMEOUT_MS',1000,30000],['LLM_COMPLETION_BUDGET_MS',5000,120000],['LLM_AGENT_BUDGET_MS',10000,300000],['LLM_MAX_ATTEMPTS',1,20],['LLM_MAX_PROVIDER_ATTEMPTS',1,5],['LLM_MAX_OUTPUT_TOKENS',256,8192]])number(name,min,max,true);
     if(config.llmAttemptTimeout>config.llmCompletionBudget)errors.push('LLM_ATTEMPT_TIMEOUT_MS deve caber em LLM_COMPLETION_BUDGET_MS.');
     if(config.llmCompletionBudget>config.llmAgentBudget)errors.push('LLM_COMPLETION_BUDGET_MS deve caber em LLM_AGENT_BUDGET_MS.');
@@ -26,7 +26,7 @@ function validateConfiguration(config) {
     if(!config.aiProviderOrder?.length)errors.push('AI_PROVIDER_ORDER deve conter ao menos um provedor.');
     for(const family of config.aiProviderOrder||[])if(!['local','gemini','groq','huggingface','pollinations'].includes(family))errors.push('AI_PROVIDER_ORDER contém um provedor desconhecido.');
     for(const name of ['GEMINI_MODELS','GROQ_MODELS','HF_MODELS'])if(process.env[name]&&!process.env[name].split(',').every(model=>/^[a-zA-Z0-9_.:/-]+$/.test(model.trim())))errors.push(`${name}: use IDs de modelos separados por vírgulas.`);
-    if(process.env.LOG_LEVEL&&!['debug','info','warn','error'].includes(process.env.LOG_LEVEL))errors.push('LOG_LEVEL: use debug, info, warn ou error.');
+    if(process.env.LOG_EFFORT&&!['0','1','2'].includes(process.env.LOG_EFFORT.trim()))errors.push('LOG_EFFORT: use 0, 1 ou 2.');
     for(const name of ['GEMINI_URL','HF_API_URL','LOCAL_LLM_URL','MODAL_TTS_ENDPOINT','HF_TTS_ENDPOINT','POLLINATIONS_TEXT_URL','OPENAI_STT_URL','HF_STT_URL','LOCAL_STT_URL']) {
         if(!process.env[name])continue;
         try { const url=new URL(process.env[name]);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error(); }
@@ -39,9 +39,6 @@ function validateConfiguration(config) {
         catch { errors.push(`${name}: pasta inacessível.`); }
     }
     if(config.authDir===config.dataDir)errors.push('WHATSAPP_AUTH_DIR e WHATSAPP_DATA_DIR devem ser pastas diferentes.');
-    const logDirectory=path.resolve(config.root,process.env.LOG_DIR||'logs'),relative=path.relative(config.root,logDirectory);
-    if(!relative||relative.startsWith('..')||path.isAbsolute(relative))errors.push('LOG_DIR: use uma subpasta do projeto, como logs.');
-    else if(fs.existsSync(logDirectory)&&(!fs.lstatSync(logDirectory).isDirectory()||fs.lstatSync(logDirectory).isSymbolicLink()))errors.push('LOG_DIR: escolha uma pasta sem links simbólicos.');
     if(config.ytdlpCookiesPath&&!fs.existsSync(config.ytdlpCookiesPath))warnings.push('YTDLP_COOKIES_PATH não existe; downloads serão tentados sem cookies.');
     const ffmpeg=findExecutable(config.ffmpegPath),ytdlp=findExecutable(config.ytdlpPath),python=findExecutable(config.pythonPath);
     const capabilities={download:ffmpeg&&ytdlp,voice:ffmpeg&&Boolean(config.hfTtsEndpoint||config.modalTtsEndpoint),transcription:ffmpeg&&Boolean(config.geminiApiKeys.length||config.hfToken||process.env.GROQ_API_KEY||process.env.WITAI_TOKEN||process.env.OPENAI_STT_KEY||process.env.LOCAL_STT_URL),deezer:python&&Boolean(process.env.DEEZER_ARL)};

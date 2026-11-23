@@ -123,7 +123,7 @@ Ao reiniciar a aplicação, a IA já terá total conhecimento da nova ferramenta
 
 ## 💡 Dicas de Desenvolvimento
 
-- 💡 **Rastreamento de Pensamento:** Ao rodar no terminal com `LOG_LEVEL=debug`, a Hikari imprime os pensamentos intermediários do modelo e o disparo de cada ferramenta com seus argumentos e tempos de resposta.
+- Use `LOG_EFFORT=2` em um terminal restrito para diagnosticar dados de chamadas de ferramentas. Volte ao nível `1` depois do diagnóstico.
 - 💡 **Isolamento por Try/Catch:** Toda ferramenta externa deve ser encapsulada em blocos protegidos para garantir que falhas em APIs terceiras retornem uma mensagem de erro à IA sem causar travamento na fila do WhatsApp.
 - 💡 **Testes Unitários:** Ao adicionar ou modificar ferramentas, adicione o caso de teste em `tests/zap/` e valide o comportamento rodando `npm test`.
 

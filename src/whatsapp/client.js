@@ -69,7 +69,7 @@ async function start({store = new Store()} = {}) {
         clearTimeout(timer);
         clearTimeout(stableTimer);
         router.queue.pause();
-        logger.warn(reason);
+        logger.event('warn', 'restricted', reason);
         const closing = socket;
         socket = null;
         closing?.end(new Error('Conexão interrompida por proteção local.'));
@@ -145,14 +145,14 @@ async function start({store = new Store()} = {}) {
                     halt('Prazo de pareamento encerrado. Nenhuma nova tentativa automática será feita; confira se a conta permite adicionar dispositivos.');
                     return;
                 }
-                console.log('Abra WhatsApp > Aparelhos conectados > Conectar aparelho e escaneie o QR no terminal.');
-                qrcode.generate(update.qr,{small:true});
+                logger.event('system', 'pairing');
+                qrcode.generate(update.qr, { small: true }, drawing => process.stdout.write(drawing));
             }
             if (update.connection === 'open') {
                 identities.learn([socket.user?.id,socket.user?.lid,state.creds.me?.id,state.creds.me?.lid]);
                 clearTimeout(stableTimer);
                 stableTimer = setTimeout(() => { attempts = 0; },120000);
-                logger.system('Login confirmado. Hikari Zap conectada; chats privados e grupos.');
+                logger.event('system', 'online', 'Login confirmado. Hikari Zap conectada; chats privados e grupos.');
                 notifyOwners(currentSocket).catch(() => logger.warn('Falha na confirmação ao proprietário.'));
             }
             if (update.connection === 'close') {
@@ -165,7 +165,7 @@ async function start({store = new Store()} = {}) {
                 const code = Number(error?.output?.statusCode) || undefined;
                 const reasonNode = Array.isArray(error?.data?.content) ? error.data.content.find(node => node?.tag) : null;
                 const reason = String(reasonNode?.tag || error?.data?.reason || error?.data?.attrs?.reason || 'nao-informado').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60);
-                logger.warn(`Conexão WhatsApp fechada: código ${code || 'desconhecido'}; motivo ${reason}.`);
+                logger.event('warn', 'disconnected', `Conexão WhatsApp fechada: código ${code || 'desconhecido'}; motivo ${reason}.`, code);
                 if ([wa.DisconnectReason.loggedOut,wa.DisconnectReason.connectionReplaced,wa.DisconnectReason.forbidden,wa.DisconnectReason.multideviceMismatch,405,406,429].includes(code)) {
                     halt('Login encerrado, conexão recusada ou restrita. Sessão preservada; não será solicitado outro QR automaticamente. Confira a conta no aplicativo oficial antes de reiniciar.');
                     return;
@@ -179,7 +179,7 @@ async function start({store = new Store()} = {}) {
             for (const raw of event.messages) {
                 const normalized = normalizeIncoming(raw,wa.normalizeMessageContent,{botJids:[socket.user?.id,socket.user?.lid,state.creds.me?.id,state.creds.me?.lid],sentMessageKeys,identities});
                 if (!normalized) continue;
-                logger.zap(`Mensagem recebida de "${normalized.senderName}" (${normalized.senderId}) no chat ${normalized.chatId} [${normalized.isGroup ? 'GRUPO' : 'PRIVADO'}] | Texto: "${normalized.text.slice(0, 150)}"${normalized.hasMedia ? ` | Anexo: ${normalized.mediaType}` : ''}`);
+                logger.event('zap', 'incoming', `Mensagem recebida de "${normalized.senderName}" (${normalized.senderId}) no chat ${normalized.chatId} [${normalized.isGroup ? 'GRUPO' : 'PRIVADO'}] | Texto: "${normalized.text}"${normalized.hasMedia ? ` | Anexo: ${normalized.mediaType}` : ''}`);
                 let mediaPromise;
                 normalized.getMedia = () => mediaPromise ||= (async () => {
                     const node = normalized.mediaNode;
@@ -220,8 +220,8 @@ async function start({store = new Store()} = {}) {
                     const targetJid = options.targetJid || payload.targetJid || normalized.transportJid;
                     const sendReply = async content => {
                         if (stopping || socket !== currentSocket) throw new Error('Conexão WhatsApp interrompida; tente novamente após reconectar.');
-                        logger.zap(`Enviando resposta para ${targetJid}: ${typeof content.text === 'string' ? content.text.slice(0, 160) : Object.keys(content).join(', ')}`);
                         const sent = await sendLimited(currentSocket,targetJid,content,targetJid === normalized.transportJid ? {quoted:raw} : {});
+                        if (sent) logger.event('zap', 'outgoing', `Resposta enviada para ${targetJid}: ${typeof content.text === 'string' ? content.text : Object.keys(content).join(', ')}`);
                         if (sent?.key?.id) {
                             sentMessageKeys.add(`${targetJid}:${sent.key.id}`);
                             if (sentMessageKeys.size > 2000) sentMessageKeys.delete(sentMessageKeys.values().next().value);

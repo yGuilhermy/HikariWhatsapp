@@ -38,7 +38,7 @@ function createToolExecutor(overrides = {}) {
     return async function execute(name, args, ctx) {
         ctx.signal?.throwIfAborted();
         if (ctx.onToolStart) await ctx.onToolStart(name);
-        logger.tool(`Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
+        logger.event('tool', 'tool', `Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
         validate(name,args);
         if (name === 'create_sticker') {
             const media = await ctx.getMedia();

@@ -187,10 +187,10 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                 if (!queue.paused && message.text) store.addHistory(message.chatId,'user',recordText(message.text));
                 return;
             }
-            logger.zap(`Mensagem direcionada à Hikari de "${message.senderName}" no chat ${message.chatId}. Enfileirando...`);
+            logger.event('zap', 'queued', `Mensagem direcionada à Hikari de "${message.senderName}" no chat ${message.chatId}. Enfileirando...`);
             const sendText = text => sendReply({text:String(text)});
             if (['cancelar','parar'].includes(cmd.name)) {
-                logger.command(`${config.prefix || '>'}${cmd.name} acionado por "${message.senderName}" no chat ${message.chatId}`);
+                logger.event('command', 'command', `${config.prefix || '>'}${cmd.name} acionado por "${message.senderName}" no chat ${message.chatId}`);
                 const main = queue.cancel(isOwner ? null : message.chatId);
                 const owner = ownerQueue.cancel(isOwner ? null : message.chatId);
                 const res = {aborted:main.aborted||owner.aborted,dropped:main.dropped+owner.dropped};
@@ -240,7 +240,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                             return message.react?.('\ud83e\uddf9');
                         }
                         store.addHistory(message.chatId,'user',recordText(message.text || '[Anexo recebido]'));
-                        if (cmd.name) logger.command(`Executando comando "${config.prefix || '>'}${cmd.name}" de "${message.senderName}" | args: "${cmd.args}"`);
+                        if (cmd.name) logger.event('command', 'command', `Executando comando "${config.prefix || '>'}${cmd.name}" de "${message.senderName}" | args: "${cmd.args}"`);
                         let result;
                         switch (cmd.name) {
                             case 'view': case 'ver': {
@@ -345,7 +345,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 if (!prompt.trim()) throw new Error('Envie uma pergunta ou um anexo.');
                                 signal.throwIfAborted();
                                 const currentPrompt = message.isGroup ? `[Pedido atual de ${JSON.stringify(message.senderName || 'Participante')}]\n${prompt}` : prompt;
-                                logger.ai(`Disparando agente para "${message.senderName}" no chat ${message.chatId} | Prompt: "${prompt.slice(0, 100)}"`);
+                                logger.ai(`Disparando agente para "${message.senderName}" no chat ${message.chatId} | Prompt: "${prompt}"`);
                                 result = await agent(currentPrompt,ctx,executeTool);
                                 if (isDotVoice || cmd.name === 'audio') {
                                     if (typeof result === 'string' && result.trim() && !ctx.mediaSent) {

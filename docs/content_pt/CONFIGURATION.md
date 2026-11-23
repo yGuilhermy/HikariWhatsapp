@@ -97,7 +97,7 @@ Todas as respostas de câmbio informam expressamente o horário da cotação e a
 | `authDir` | `WHATSAPP_AUTH_DIR` | Pasta onde as credenciais da sessão são salvas (Padrão: `.whatsapp-auth`). |
 | `dataDir` | `WHATSAPP_DATA_DIR` | Pasta onde ficam caches técnicos de mensagens e identidades. |
 | `maxMediaMb` | `WHATSAPP_MAX_MEDIA_MB` | Tamanho máximo permitido para envio de arquivos pelo bot. |
-| `logLevel` | `LOG_LEVEL` | Nível de detalhamento dos logs (`debug`, `info`, `warn`, `error`). |
+| Terminal | `LOG_EFFORT` | `0` essencial, `1` operacional sem dados da conversa (padrão), `2` completo. |
 
 ---
 
@@ -105,7 +105,7 @@ Todas as respostas de câmbio informam expressamente o horário da cotação e a
 
 - 💡 **Diagnóstico Prévio:** Rode `npm run config:check` antes de subir o bot para verificar se todas as variáveis estão preenchidas corretamente.
 - 💡 **Personalidade Neutra no WhatsApp:** O `SYSTEM_PROMPT` padrão instrui a Hikari a responder de forma concisa e natural pelo WhatsApp, evitando saudações repetitivas ou poluição visual.
-- 💡 **Sanitização de Logs:** O sistema mascara automaticamente tokens de API, cookies, telefones e identificadores nas saídas de console e nos arquivos de log diários gravados em `logs/`.
+- **Diagnóstico.** A aplicação envia os logs ao terminal. O modo completo pode exibir mensagens e identificadores. Proteja a saída do processo e volte a `1` quando terminar.
 
 ---
 

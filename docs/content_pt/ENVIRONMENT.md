@@ -37,10 +37,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 
 | Variável | Padrão | Descrição |
 | :--- | :--- | :--- |
-| `LOG_DIR` | `logs` | Pasta local onde os arquivos de log diários serão gerados. |
-| `LOG_LEVEL` | `info` | Nível de detalhamento do console e arquivo (`debug`, `info`, `warn`, `error`). |
-| `LOG_RETENTION_DAYS` | `7` | Quantidade de dias para retenção e limpeza automática de logs antigos (1 a 90). |
-| `LOG_MAX_FILE_MB` | `5` | Tamanho máximo em MB de cada arquivo de log antes de rotacionar (1 a 50). |
+| `LOG_EFFORT` | `1` | `0` essencial, `1` operações sem dados da conversa, `2` diagnóstico detalhado. A aplicação escreve no terminal. |
 
 ---
 

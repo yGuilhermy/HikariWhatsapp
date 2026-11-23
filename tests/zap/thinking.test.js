@@ -85,16 +85,21 @@ test('chamadas compatíveis fora do pensamento continuam funcionando',async t=>{
 
 test('erro de provedor registra a causa devolvida pela API sem expor a chave',async t=>{
     const {logger}=require('../../src/utils/logger');
-    const originalWarn=logger.warn,keys=config.geminiApiKeys,lmKey=config.lmStudioApiKey;
-    const warnings=[];logger.warn=message=>warnings.push(message);
+    const originalEvent=logger.event,keys=config.geminiApiKeys,lmKey=config.lmStudioApiKey;
+    const warnings=[];
+    logger.event=(category,event,details,status)=>{
+        if(event==='api-failure')warnings.push({category,details,status});
+    };
     config.geminiApiKeys=['secret-test-key'];config.lmStudioApiKey='secret-test-key';
-    t.after(()=>{logger.warn=originalWarn;config.geminiApiKeys=keys;config.lmStudioApiKey=lmKey;});
+    t.after(()=>{logger.event=originalEvent;config.geminiApiKeys=keys;config.lmStudioApiKey=lmKey;});
     let calls=0;
     mock(t,async()=>{
         if(calls++===0)throw Object.assign(new Error('request failed'),{response:{status:400,data:[{error:{message:'Invalid request for secret-test-key'}}]}});
         return response('OK');
     });
     assert.equal((await completion([{role:'user',content:'oi'}],undefined,false)).content,'OK');
-    assert.match(warnings[0],/400.*Invalid request/);
-    assert.ok(!warnings[0].includes('secret-test-key'));
+    assert.equal(warnings[0].category,'warn');
+    assert.equal(warnings[0].status,400);
+    assert.match(warnings[0].details,/400.*Invalid request/);
+    assert.ok(!warnings[0].details.includes('secret-test-key'));
 });

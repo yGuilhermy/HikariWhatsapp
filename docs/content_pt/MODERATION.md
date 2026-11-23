@@ -26,11 +26,9 @@ A segurança da instância começa pelo não armazenamento de informações pess
 
 ## 🧹 2. Sanitização Ativa de Logs
 
-O sistema de logging (`src/utils/logger.js`) intercepta todas as saídas de depuração e erro antes de gravá-las no console ou nos arquivos diários em `logs/`:
+A HikariZap escreve os logs no terminal. Configure `LOG_EFFORT=0` para eventos essenciais, `1` para operações sem dados das conversas, ou `2` durante um diagnóstico. O nível 2 pode exibir mensagens, identificadores e argumentos. Chaves conhecidas são mascaradas. O QR de pareamento continua disponível no terminal em todos os níveis e deve ficar privado.
 
-- **Ocultação de Chaves de API:** Qualquer string com formato de chave de API conhecida (como tokens do Gemini com prefixo `AIza...`, tokens Hugging Face `hf_...` ou tokens de bearer) é automaticamente substituída pela máscara `[REDACTED]`.
-- **Identificadores de conversa.** A máscara de credenciais não elimina todos os números ou LIDs dos registros. Revise o conteúdo antes de compartilhar logs.
-- **QR Code de pareamento.** O bot imprime o QR no terminal. Restrinja o acesso ao terminal e a qualquer coletor da saída do processo.
+Um supervisor pode conservar a saída do processo conforme sua própria configuração. O histórico funcional em `state.json` continua controlado por `SAVE_HISTORY`.
 
 ---
 

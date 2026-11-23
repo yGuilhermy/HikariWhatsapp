@@ -112,7 +112,7 @@ class ProviderPool {
         let reason=typeof detail==='string'?detail:typeof detail?.message==='string'?detail.message:'';
         for(const key of unique([provider.key,...(config.geminiApiKeys||[])]))reason=reason.split(key).join('[REDACTED]');
         reason=reason.replace(/AIza[\w-]+/g,'[REDACTED]').replace(/https?:\/\/[^\s]+/g,url=>url.split('?')[0]).replace(/[\r\n]+/g,' ').slice(0,350);
-        logger.warn(`IA ${provider.family}/${safeModel(provider.model)}: ${info.status||error.code||'resposta inválida'} (${info.kind})${reason?': '+reason:''}; pausa de ${Math.ceil(delay/1000)}s antes de nova tentativa nesse destino.`);
+        logger.event('warn', 'api-failure', `IA ${provider.family}/${safeModel(provider.model)}: ${info.status||error.code||'resposta inválida'} (${info.kind})${reason?': '+reason:''}; pausa de ${Math.ceil(delay/1000)}s antes de nova tentativa nesse destino.`, info.status);
     }
     async complete(payload,signal,accept) {
         const withTools=Boolean(payload.tools?.length);
@@ -134,14 +134,14 @@ class ProviderPool {
             if(provider.family==='groq'&&/qwen\//.test(provider.model)){request.reasoning_effort='none';request.reasoning_format='hidden';}
             const timeout=Math.max(1,Math.min(config.llmTimeout,config.llmAttemptTimeout,deadline-Date.now()));
             try {
-                logger.ai(`IA tentativa ${attempts}/${config.llmMaxAttempts}: ${provider.family}/${safeModel(provider.model)} (até ${Math.ceil(timeout/1000)}s).`);
+                logger.event('ai', 'api', `IA tentativa ${attempts}/${config.llmMaxAttempts}: ${provider.family}/${safeModel(provider.model)} (até ${Math.ceil(timeout/1000)}s).`);
                 const response=await axios.post(provider.url,request,{headers:{'Content-Type':'application/json',...(provider.key?{Authorization:`Bearer ${provider.key}`}:{})},timeout,signal});
                 signal?.throwIfAborted();
                 const message=response.data?.choices?.[0]?.message;
                 const result=message?accept(message):null;
                 if(!result)throw Object.assign(new Error('Resposta sem conteúdo final.'),{code:'EMPTY_RESPONSE'});
                 this.lastWinner={family:provider.family,model:provider.model,until:Date.now()+60000};
-                logger.ai(`IA respondeu via ${provider.family}/${safeModel(provider.model)}.`);
+                logger.event('ai', 'api-success', `IA respondeu via ${provider.family}/${safeModel(provider.model)}.`);
                 return result;
             } catch(error) {
                 signal?.throwIfAborted();
