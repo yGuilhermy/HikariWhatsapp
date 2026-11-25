@@ -37,9 +37,10 @@ function createToolExecutor(overrides = {}) {
     let selectionSequence = 0;
     return async function execute(name, args, ctx) {
         ctx.signal?.throwIfAborted();
-        if (ctx.onToolStart) await ctx.onToolStart(name);
-        logger.event('tool', 'tool', `Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
         validate(name,args);
+        if (ctx.onToolStart) await ctx.onToolStart(name);
+        ctx.signal?.throwIfAborted();
+        logger.event('tool', 'tool', `Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
         if (name === 'create_sticker') {
             const media = await ctx.getMedia();
             const sticker = await service.sticker(media,ctx.signal,args.description || '');
@@ -80,7 +81,7 @@ function createToolExecutor(overrides = {}) {
         const capability={download_audio:'download',download_video:'download',send_voice_note:'voice',search_and_download_music:'deezer'}[name];
         if(capability&&config.capabilities?.[capability]===false)throw new Error('Esta função não está configurada. Confira os avisos de inicialização no terminal ou nos logs.');
         if (name === 'search_web') return service.search(args.query,ctx.signal);
-        if (name === 'check_steam') return service.steam(args.game);
+        if (name === 'check_steam') return service.steam(args.game,ctx.signal);
         if (name === 'convert_currency') return service.currency(args.amount,args.from,args.to || 'BRL',ctx.signal);
         if (name === 'generate_image') {
             const result = await service.image(args.prompt,args.negative_prompt || '',args.width || 1024,args.height || 1024);

@@ -1,10 +1,10 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-async function getSteamGameInfo(query) {
+async function getSteamGameInfo(query, signal) {
     try {
         console.log(`[STEAM] Buscando jogo: ${query}`);
-        const searchRes = await axios.get(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=brazilian&cc=BR`, { timeout: 8000 });
+        const searchRes = await axios.get(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=brazilian&cc=BR`, { timeout: 8000, signal });
         
         if (!searchRes.data || !searchRes.data.items || searchRes.data.items.length === 0) {
             return { error: `Não encontrei nenhum jogo com o nome "${query}" na Steam.` };
@@ -13,7 +13,7 @@ async function getSteamGameInfo(query) {
         const game = searchRes.data.items[0]; 
         const appId = game.id;
         
-        const detailsRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=brazilian&cc=BR`, { timeout: 8000 });
+        const detailsRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=brazilian&cc=BR`, { timeout: 8000, signal });
         
         if (!detailsRes.data || !detailsRes.data[appId] || !detailsRes.data[appId].success) {
              return { error: `Encontrei o jogo na busca, mas não consegui puxar os detalhes do AppID ${appId}.` };
@@ -36,6 +36,8 @@ async function getSteamGameInfo(query) {
             name: data.name,
             appId: appId,
             price: price,
+            priceValue: Number.isInteger(data.price_overview?.final) ? data.price_overview.final / 100 : data.is_free ? 0 : null,
+            priceCurrency: data.price_overview?.currency || (data.is_free ? 'BRL' : null),
             originalPrice: originalPrice,
             discount: discount,
             description: desc,
@@ -48,8 +50,9 @@ async function getSteamGameInfo(query) {
         };
         
     } catch (error) {
+        signal?.throwIfAborted();
         console.error('[STEAM] Erro na API:', error.message);
-        return { error: `Deu um erro na conexão com a Steam: ${error.message}` };
+        return { error: 'Não consegui consultar a Steam. Tente novamente em instantes.' };
     }
 }
 

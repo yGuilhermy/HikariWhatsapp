@@ -29,13 +29,16 @@ function normalizeIncoming(raw, normalizeMessageContent, {botJids = [], sentMess
     const senderAliases=[...new Set([primary,canonicalSender,...(identities?.aliases(canonicalSender)||[])].filter(Boolean))];
     const bots=new Set(botJids.map(userJid).filter(Boolean));
     const isBot=id=>[...bots].some(bot=>identities?identities.same(id,bot):userJid(id)===bot);
+    const quoteSenders = [context.participant, context.participantAlt].map(userJid).filter(Boolean);
+    const isReplyToBot = Boolean(quoted && (quoteSenders.some(isBot) ||
+        (context.stanzaId && sentMessageKeys?.has(`${jid}:${context.stanzaId}`))));
+    const quotedAuthor = isReplyToBot ? 'Hikari' : quoteSenders.some(id =>
+        senderAliases.includes(id) || identities?.same(id, canonicalSender)) ? 'pessoa do pedido atual' :
+        quoteSenders.length ? 'outro participante' : 'autoria não identificada';
     return {id:raw.key.id,key:raw.key,chatId:isGroup ? jid : canonicalSender,senderId:canonicalSender,senderAliases,transportJid:jid,fromMe:false,isGroup,receivedAt:Date.now(),
         senderName:String(raw.pushName || 'Participante').replace(/[\r\n]/g,' ').slice(0,80),
         isBotMentioned:(textNode.contextInfo?.mentionedJid || []).some(isBot),
-        isReplyToBot:Boolean(quoted && (
-            [context.participant,context.participantAlt].some(id => id && isBot(id)) ||
-            (context.stanzaId && sentMessageKeys?.has(`${jid}:${context.stanzaId}`))
-        )),
+        isReplyToBot, quotedAuthor: quoted ? quotedAuthor : undefined,
         text:content.conversation || textNode.text || textNode.caption || '',
         hasMedia:Boolean(mediaType),mediaType,mediaNode:mediaContent[`${mediaType}Message`],
         quotedMessageId:quoted ? context.stanzaId : undefined,

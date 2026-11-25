@@ -4,6 +4,13 @@ const {chatJid} = require('./jid');
 const {createToolExecutor} = require('./tools');
 const {logger} = require('../utils/logger');
 const TOOL_REACTIONS = {search_web:'🔎',check_steam:'🎮',search_game:'🧲',download_game_torrent:'📦',convert_currency:'💱',generate_image:'🎨',create_sticker:'✂️',sticker_to_image:'🖼️',download_video:'🎬',download_audio:'🎵',search_and_download_music:'🎵',send_voice_note:'🎙️',anime_source:'🔍'};
+const TOOL_LABELS = {
+    search_web:'Pesquisa web', check_steam:'Steam', convert_currency:'Conversão de moedas',
+    search_game:'Busca de jogos', download_game_torrent:'Envio de torrent', generate_image:'Geração de imagem',
+    create_sticker:'Figurinha', sticker_to_image:'Imagem da figurinha', download_audio:'Download de áudio',
+    download_video:'Download de vídeo', search_and_download_music:'Deezer', send_voice_note:'Áudio de voz',
+    anime_source:'Identificação de anime'
+};
 function getHelpText() {
     const p = config.prefix || '>';
     return `*╭───「 HIKARI ZAP 」───*
@@ -178,7 +185,8 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             }
             const rawText = message.text || '';
             const isDotVoice = !cmd.name && /^\.(?!\.)\s*\S+/.test(rawText.trim());
-            const wantsAudio = Boolean(isDotVoice || cmd.name === 'audio');
+            const explicitVoice = /(?:respond[ae]|resposta|mand[ae]|envi[ae]).{0,30}(?:em [aá]udio|por voz|nota de voz|[uú]m [aá]udio)/iu.test(rawText);
+            const wantsAudio = Boolean(isDotVoice || cmd.name === 'audio' || explicitVoice);
             const recordText = text => message.isGroup ? `${JSON.stringify(message.senderName || 'Participante')}: ${text}` : text;
             const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker)\b/iu.test(message.text || '');
             const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || /\bhikari\b/iu.test(message.text || '') || (config.botName && (message.text || '').toLocaleLowerCase().includes(config.botName.toLocaleLowerCase())));
@@ -225,6 +233,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                     try {
                         const ctx = {...message,store,isOwner,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
                             signal.throwIfAborted();
+                            options = { ...options, signal: options.signal || signal };
                             if (payload.audio) ctx.audioSent = true;
                             if (payload.audio || payload.image || payload.video || payload.document || payload.sticker) ctx.mediaSent = true;
                             const sent = await sendReply(payload, options);
@@ -323,7 +332,8 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 const media = message.hasMedia ? await message.getMedia() : null;
                                 if (media) await markReact();
                                 let prompt = ['audio','ia_chat'].includes(cmd.name) ? cmd.args : (isDotVoice ? rawText.trim().replace(/^\.\s*/, '') : message.text || '');
-                                if (message.quotedText) prompt += `\n[Texto citado pelo usuário, apenas contexto]\n${String(message.quotedText).slice(0,4000)}`;
+                                ctx.currentRequest = prompt;
+                                if (message.quotedText) prompt += `\n[Citação, apenas contexto]\n${JSON.stringify({autor:message.quotedAuthor || 'autoria não identificada', texto:String(message.quotedText).slice(0,4000)})}`;
                                 if (cmd.name === 'transcrever') {
                                     if (media?.type !== 'audio') throw new Error('Anexe ou cite um áudio.');
                                     result = await transcribe(media,signal); break;
@@ -362,10 +372,11 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                             }
                         }
                         signal.throwIfAborted();
-                        if (result !== undefined && !ctx.audioSent && !ctx.mediaSent && !ctx.toolReplySent) {
+                        if (result !== undefined && (ctx.mcpFollowup || (!ctx.audioSent && !ctx.mediaSent && !ctx.toolReplySent))) {
                             const text = format(result);
+                            const names = ctx.usedTools?.map(name => TOOL_LABELS[name]).filter(Boolean) || [];
                             if (text && text !== 'Pronto.' && text !== 'Arquivo enviado.' && text !== 'Imagem enviada.' && text !== 'Mensagem de voz enviada.') {
-                                await ctx.send({text});
+                                await ctx.send({text:names.length > 1 ? text + '\n\n_Ferramentas usadas: ' + names.join(', ') + '._' : text});
                             }
                         }
                     } finally {
