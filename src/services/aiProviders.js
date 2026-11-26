@@ -118,7 +118,8 @@ class ProviderPool {
         const withTools=Boolean(payload.tools?.length);
         const providers=this.candidates(withTools);
         const maxAttempts=config.llmMaxAttempts;
-        const deadline=Date.now()+Math.max(config.llmCompletionBudget,Math.min(providers.length,maxAttempts)*config.llmAttemptTimeout);
+        const deadline=Date.now()+config.llmCompletionBudget;
+        const retriedEmptyResponses=new Set();
         const attemptsByFamily=new Map();let attempts=0,earliest=Infinity;
         for(const provider of providers) {
             signal?.throwIfAborted();
@@ -143,7 +144,14 @@ class ProviderPool {
                 signal?.throwIfAborted();
                 const message=response.data?.choices?.[0]?.message;
                 const result=message?accept(message):null;
-                if(!result)throw Object.assign(new Error('Resposta sem conteúdo final.'),{code:'EMPTY_RESPONSE'});
+                if (!result) {
+                    if (!retriedEmptyResponses.has(identity) && attempts < maxAttempts && count + 1 < config.llmMaxProviderAttempts) {
+                        retriedEmptyResponses.add(identity);
+                        providers.push(provider);
+                        continue;
+                    }
+                    throw Object.assign(new Error('Resposta sem conteúdo final.'),{code:'EMPTY_RESPONSE'});
+                }
                 this.lastWinner={family:provider.family,model:provider.model,until:Date.now()+60000};
                 logger.event('ai', 'api-success', `IA respondeu via ${provider.family}/${safeModel(provider.model)}.`);
                 return result;

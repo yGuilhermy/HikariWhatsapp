@@ -265,6 +265,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
             ids.add(id);
             return {...call, id};
         });
+        toolContext.mediaCaption = text && !isActionPromise(text) && !placeholder.test(text) ? text.slice(0, 1000) : '';
         const pendingSteam = calls.some(call => call.function.name === 'check_steam');
         messages.push({role:'assistant',content:null,tool_calls:calls});
         // The price available at the start of a batch is the only one the model has seen.

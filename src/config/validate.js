@@ -18,7 +18,7 @@ function validateConfiguration(config) {
         const value=Number(raw);
         if(!Number.isFinite(value)||value<min||value>max||(integer&&!Number.isInteger(value))) errors.push(`${name}: informe ${integer?'um inteiro':'um número'} entre ${min} e ${max}.`);
     };
-    for(const name of ['SAVE_HISTORY','LOCAL_LLM_ENABLED','WHATSAPP_NOTIFY_OWNER','WHATSAPP_VISION_ENABLED','ALLOW_PUBLIC_POLLINATIONS'])if(process.env[name]&&!['true','false'].includes(process.env[name])) errors.push(`${name}: use true ou false.`);
+    for(const name of ['SAVE_HISTORY','LOCAL_LLM_ENABLED','WHATSAPP_NOTIFY_OWNER','WHATSAPP_VISION_ENABLED','WHATSAPP_SOUND_STICKERS','WHATSAPP_SUPERVISED_ONLY','GROQ_CHAT_ENABLED','ALLOW_PUBLIC_POLLINATIONS'])if(process.env[name]&&!['true','false'].includes(process.env[name])) errors.push(`${name}: use true ou false.`);
     for(const [name,min,max,int] of [['WHATSAPP_MAX_MEDIA_MB',1,64,true],['LLM_TIMEOUT_MS',5000,120000,true],['VOICE_SPEED',0.5,2,false],['VOICE_TEMPERATURE',0,2,false],['VOICE_MAX_CHARS',1,5000,true]])number(name,min,max,int);
     for(const [name,min,max] of [['QUEUE_CONCURRENCY',1,4],['QUEUE_MAX_PENDING',1,100],['QUEUE_MAX_PER_CHAT',1,10],['QUEUE_WAIT_TIMEOUT_MS',1000,900000],['QUEUE_TASK_TIMEOUT_MS',5000,600000],['LLM_ATTEMPT_TIMEOUT_MS',1000,30000],['LLM_COMPLETION_BUDGET_MS',5000,120000],['LLM_AGENT_BUDGET_MS',10000,300000],['LLM_MAX_ATTEMPTS',1,20],['LLM_MAX_PROVIDER_ATTEMPTS',1,5],['LLM_MAX_OUTPUT_TOKENS',256,8192]])number(name,min,max,true);
     if(config.llmAttemptTimeout>config.llmCompletionBudget)errors.push('LLM_ATTEMPT_TIMEOUT_MS deve caber em LLM_COMPLETION_BUDGET_MS.');
@@ -34,7 +34,13 @@ function validateConfiguration(config) {
         catch { errors.push(`${name}: informe uma URL HTTP ou HTTPS válida, sem credenciais embutidas.`); }
     }
     for(const part of (process.env.WHATSAPP_OWNER_NUMBERS||'').split(',').filter(x=>x.trim()))if(!/^\d{8,15}$/.test(part.replace(/[+()\s-]/g,'')))errors.push('WHATSAPP_OWNER_NUMBERS: use números completos com DDI e DDD; nomes e LIDs não concedem privilégios.');
-    if(!config.ownerNumbers.length)warnings.push('Proprietário não configurado; comandos exclusivos do dono indisponíveis. O placeholder não concede acesso.');
+    const ownerJids = (process.env.WHATSAPP_OWNER_JIDS || '').split(',').map(value => value.trim()).filter(Boolean);
+    if (ownerJids.some(id => !/^\d+@(s\.whatsapp\.net|lid)$/.test(id))) {
+        errors.push('WHATSAPP_OWNER_JIDS: informe os identificadores PN ou LID completos, separados por vírgulas.');
+    }
+    if (!config.ownerNumbers.length && !config.ownerJids?.length) {
+        warnings.push('Proprietário não configurado; comandos exclusivos do dono indisponíveis. O placeholder não concede acesso.');
+    }
     for(const [name,directory] of [['WHATSAPP_AUTH_DIR',config.authDir],['WHATSAPP_DATA_DIR',config.dataDir]]) {
         try { if(directory===path.parse(directory).root||fs.existsSync(directory)&&(!fs.lstatSync(directory).isDirectory()||fs.lstatSync(directory).isSymbolicLink()))errors.push(`${name}: escolha uma pasta própria, sem links simbólicos.`); }
         catch { errors.push(`${name}: pasta inacessível.`); }
