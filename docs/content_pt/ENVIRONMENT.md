@@ -28,6 +28,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 | `WHATSAPP_NOTIFY_OWNER` | `false` | Se `true`, envia mensagem privada ao proprietário confirmando a inicialização. |
 | `WHATSAPP_AUTH_DIR` | `.whatsapp-auth` | Diretório onde as credenciais de sessão do Baileys são gravadas. |
 | `WHATSAPP_DATA_DIR` | `src/data/zap` | Diretório de persistência de contexto e cache técnico de identidades. |
+| `WHATSAPP_VISION_ENABLED` | `true` | Controle da descrição de imagens e figurinhas e da leitura de texto visual. Com `false`, o Zap não envia essas imagens ao provedor de visão. Figurinhas, Trace.moe e geração de imagem continuam disponíveis. |
 | `WHATSAPP_MAX_MEDIA_MB` | `16` | Limite máximo em MB para envio de mídias pelo bot (Permitido: 1 a 64). |
 | `SAVE_HISTORY` | `true` | Grava até 15 entradas recentes por conversa em `state.json`. Desativar impede novas gravações de histórico e preserva os registros existentes. |
 

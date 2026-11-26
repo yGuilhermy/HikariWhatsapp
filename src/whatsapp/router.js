@@ -374,7 +374,16 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     result = await hold(() => transcribe(media,signal)); break;
                                 }
                                 if (cmd.name && !['audio','ia_chat'].includes(cmd.name)) throw new Error(`Comando desconhecido. Use ${config.prefix || '>'}ajuda.`);
-                                if (media?.type === 'audio') prompt += `\n[Transcrição do áudio recebido]\n${await hold(() => transcribe(media,signal))}`;
+                                const stickerFromImage = media?.type === 'image' && /\b(figurinha|sticker)\b/iu.test(ctx.currentRequest);
+                                const visionDisabled = !config.visionEnabled && ['image','sticker'].includes(media?.type) && !stickerFromImage;
+                                if (visionDisabled) {
+                                    if (!ctx.currentRequest.trim()) {
+                                        result = 'A visão computacional está desativada. Você pode enviar uma pergunta em texto.';
+                                        break;
+                                    }
+                                    prompt += '\n[Visão computacional desativada. A mídia não foi analisada. Responda apenas com base no texto e avise se a análise visual for necessária.]';
+                                }
+                                else if (media?.type === 'audio') prompt += `\n[Transcrição do áudio recebido]\n${await hold(() => transcribe(media,signal))}`;
                                 else if (media?.type === 'sticker') {
                                     const sharp = require('sharp');
                                     const buffer = await sharp(media.buffer,{page:0,pages:1,limitInputPixels:40000000}).png().toBuffer();
@@ -382,7 +391,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     prompt += `\n[Descrição da figurinha recebida ou citada; primeiro quadro se animada]\n${await describe({type:'image',buffer,mimetype:'image/png'},signal)}`;
                                 }
                                 else if (media?.type === 'image') {
-                                    if (/\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Imagem anexada ou citada disponível para create_sticker.]';
+                                    if (stickerFromImage) prompt += '\n[Imagem anexada ou citada disponível para create_sticker.]';
                                     else prompt += `\n[Descrição da imagem recebida]\n${await describe(media,signal)}`;
                                 }
                                 else if (media?.type === 'video' && /\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Vídeo ou GIF disponível para create_sticker. Se a pessoa pedir som, use create_sound_sticker quando disponível.]';
