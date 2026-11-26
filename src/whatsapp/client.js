@@ -97,7 +97,7 @@ async function start({store = new Store()} = {}) {
     }
     process.once('exit',releaseLock);
     const {state,saveCreds,flush} = await openAuthState(config.authDir,wa);
-    logger.system(state.creds.registered ? 'Sessão salva encontrada; validando login no WhatsApp.' : 'Sem login salvo; aguardando QR code para pareamento.');
+    logger.system(state.creds.me?.id ? 'Sessão salva encontrada; validando login no WhatsApp.' : 'Sem login salvo; aguardando QR code para pareamento.');
     if (config.notifyOwnerOnConnect && !config.ownerNumbers.length) logger.warn('Configure WHATSAPP_OWNER_NUMBERS para receber a confirmação de conexão.');
     const router = createRouter({store});
     const inbox = new Inbox(path.join(config.dataDir,'pending-requests'),wa.BufferJSON,reason => {
