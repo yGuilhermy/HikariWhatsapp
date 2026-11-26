@@ -72,6 +72,8 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 • \`${p}fila\` — Mostra o estado da fila
 
 ────────────────────────
+Site oficial: https://projetohikari.com/
+
 Comandos, aliases e reações:
 https://projetohikari.com/docs/whatsapp/comandos/`;
 }
