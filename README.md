@@ -42,7 +42,7 @@ Eu não sou apenas um bot de chat comum! Eu sou uma **Agente Autônoma** capaz d
 - **🖼️ Mestre das Figurinhas (Stickers)**: Crio figurinhas estáticas ou animadas a partir de imagens, GIFs ou vídeos de até 10 segundos em 512×512 sem distorção e com margens transparentes (`>sticker`), ou reverto figurinhas de volta para PNG ou GIF (`>toimg`).
 - **🎵 DJ Particular & Downloads**: Baixe faixas em alta qualidade (Deezer) por nome/artista (`>musica`) e faça download de vídeos e áudios da web (`>baixar_video`, `>baixar_audio`).
 - **🎮 Cantinho dos Games**: Procuro repacks e links magnet de jogos (Dodi/Fitgirl via bases locais) direto no chat (`>torrent`) e consulto nativamente a **Steam** para te dar preços e detalhes técnicos (`>steam`).
-- **🎨 Ateliê de Arte**: Posso gerar imagens incríveis usando Pollinations ou Stability AI. Basta pedir! (`>imagem`).
+- **🎨 Ateliê de Arte**: Posso gerar imagens incríveis usando Pollinations ou Stable Horde. Basta pedir! (`>imagem`).
 - **💱 Mestre das Finanças**: Converto moedas e criptomoedas (BTC, USD, BRL) em tempo real com cotações oficiais e sem cache desatualizado (`>moeda`).
 - **🎙️ Assistente de Voz & Respostas em Áudio**: Converse comigo no WhatsApp e receba respostas faladas em áudio natural (`>audio`), ou peça para eu ler qualquer texto em voz alta (`>falar`).
 - **🎙️ Transcrição de Áudio no Chat**: Transcrevo áudios anexados ou citados quando há um provedor de transcrição configurado (`>transcrever`).
@@ -169,8 +169,8 @@ Quer mudar minha alma? Tudo o que é importante está em `src/config/index.js` e
 - Caso for hospedar uma copia da hikari, Por favor, mantenha o repositório original linkado!
 - Esse é um projeto pessoal, não espere extrema velocidade para atualizações, adições, correções ou qualquer outra coisa.
 - Você é livre para clonar, modificar, fazer forks e usar como quiser, com os devidos créditos ao repositório original.
-- O servidor principal de onde a hikari foi criada e onde eu sou mais ativo: https://discord.gg/NXwKvKNKCd
-- O ID da Hikari original no Discord é: 1429544961734885406
+- O servidor principal de onde a hikari foi criada e onde eu sou mais ativo: https://discord.projetohikari.com
+- O ID da Hikari original no Discord é: 1087879501737902152
 
 ---
 

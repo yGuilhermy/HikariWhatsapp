@@ -51,7 +51,7 @@ function validateConfiguration(config) {
     const capabilities = {
         download: ffmpeg && ffprobe && ytdlp,
         voice: ffmpeg && Boolean(config.hfTtsEndpoint || config.modalTtsEndpoint),
-        transcription: ffmpeg && Boolean(config.geminiApiKeys.length || config.hfToken || process.env.GROQ_API_KEY || process.env.WITAI_TOKEN || process.env.OPENAI_STT_KEY || process.env.LOCAL_STT_URL),
+        transcription: ffmpeg && Boolean(config.geminiApiKeys.length || config.hfToken || process.env.GROQ_API_KEY || process.env.WITAI_TOKEN || process.env.OPENAI_STT_KEY || process.env.HF_STT_URL || process.env.LOCAL_STT_URL),
         deezer: Boolean(deezerModules && ffprobe)
     };
     if (!ffmpeg) warnings.push('FFMPEG_PATH não encontrado: conversão de mídia indisponível.');
@@ -62,7 +62,7 @@ function validateConfiguration(config) {
     if(!capabilities.voice)warnings.push('Voz indisponível: configure um endpoint TTS e FFmpeg.');
     if(!capabilities.transcription)warnings.push('Transcrição indisponível: configure um provedor STT e FFmpeg.');
     if(!capabilities.deezer)warnings.push('Download Deezer indisponível: configure DEEZER_ARL e Python.');
-    if(!config.localLlmEnabled&&!config.geminiApiKeys.length&&!config.hfToken&&!process.env.POLLINATIONS_API_KEY&&!process.env.GROQ_CHAT_API_KEY&&!process.env.GROQ_API_KEY)warnings.push('IA sem credenciais configuradas; configure um dos provedores antes de conversar.');
+    if(!config.localLlmEnabled&&!config.geminiApiKeys.length&&!config.hfToken&&!process.env.POLLINATIONS_API_KEY&&!(process.env.GROQ_CHAT_ENABLED==='true'&&process.env.GROQ_CHAT_API_KEY))warnings.push('IA sem credenciais configuradas; configure um dos provedores antes de conversar.');
     return {errors:[...new Set(errors)],warnings:[...new Set(warnings)],capabilities};
 }
 module.exports={validateConfiguration,findExecutable};

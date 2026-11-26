@@ -197,6 +197,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             };
             const isOwner = [senderId,...(message.senderAliases || [])].some(id=>config.isOwner(id));
             if (!message.recovered && store.seen(`${message.chatId}:${message.id}`)) return;
+            if ([senderId,...(message.senderAliases || [])].some(id=>store.banned?.(id))) return;
             const cmd = command(message.text);
             const choiceText = String(message.text || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
             const choice = choiceText.match(/^(?:(?:eu\s+)?(?:quero|manda|mande|envia|envie|baixa|baixe|pega|pegue|escolho|seleciona|selecione)\s+)?(?:(?:o|a|numero|opcao|resultado|jogo)\s+)*(\d+|primeiro|primeira|segundo|segunda|terceiro|terceira|quarto|quarta|quinto|quinta)(?:\s+(?:por favor|pfv|pf|pra mim|para mim))?[.!]?$/);

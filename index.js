@@ -11,6 +11,7 @@ function prepareEnvironment() {
 }
 
 if (require.main === module) {
+    const startedBySupervisor = Boolean(process.env.INVOCATION_ID) || process.env.HIKARI_TMUX_SUPERVISOR === '1';
     prepareEnvironment();
     const {logger} = require('./src/utils/logger');
     const config = require('./src/config');
@@ -18,7 +19,7 @@ if (require.main === module) {
     const report = validateConfiguration(config);
     config.capabilities = report.capabilities;
     for (const warning of report.warnings) logger.warn(warning);
-    if (process.env.WHATSAPP_SUPERVISED_ONLY === 'true' && !process.env.INVOCATION_ID && process.env.HIKARI_TMUX_SUPERVISOR !== '1') {
+    if (process.env.WHATSAPP_SUPERVISED_ONLY === 'true' && !startedBySupervisor) {
         logger.event('error','managed-service');
         process.exitCode = 1;
     } else if (report.errors.length) {

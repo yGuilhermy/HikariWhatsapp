@@ -40,12 +40,17 @@ O catálogo `src/data/mcp_tools.json` expõe as seguintes funções para a IA:
 | `search_web` | `query` (string) | Realiza busca semântica na web e retorna trechos limpos de sites. |
 | `convert_currency` | `amount`, `from`, `to` | Converte valores monetários usando a cotação oficial em tempo real. |
 | `check_steam` | `game` (string) | Consulta a loja da Steam e recupera dados de preço, gênero e desconto. |
-| `search_game` | `query` (string) | Pesquisa nos catálogos locais FitGirl e DODI e retorna até 5 repacks. |
+| `search_game` | `game_name` (string) | Pesquisa nos catálogos locais FitGirl e DODI e retorna até 5 repacks. |
 | `download_game_torrent`| `result_index` (número) | Valida o infohash e envia o magnet link como arquivo `.txt` no WhatsApp. |
 | `create_sticker` | `description` (opcional) | Converte a imagem citada ou anexada em figurinha 512×512 com padding. |
-| `identify_anime` | *(Imagem anexada/citada)* | Consulta a API Trace.moe para identificar frame de animação japonesa. |
-| `text_to_speech` | `text` (string) | Sintetiza voz falada (TTS) para responder dúvidas em formato de áudio PTT. |
+| `anime_source` | *(Imagem anexada/citada)* | Consulta a API Trace.moe para identificar frame de animação japonesa. |
+| `send_voice_note` | `text` (string) | Sintetiza voz falada (TTS) para responder dúvidas em formato de áudio PTT. |
 | `generate_image` | `prompt` (string) | Gera artes visuais via difusão de imagens. |
+| `create_sound_sticker` | `name (opcional)` | Cria uma figurinha com até 10 segundos de áudio do vídeo. |
+| `search_and_download_music` | `query` | Pesquisa no Deezer ou envia a faixa selecionada. |
+| `download_audio` | `url` | Baixa o áudio de um link compatível. |
+| `download_video` | `url` | Baixa o vídeo de um link compatível. |
+
 
 ---
 
@@ -53,7 +58,7 @@ O catálogo `src/data/mcp_tools.json` expõe as seguintes funções para a IA:
 
 O transporte do WhatsApp é implementado em `src/whatsapp/client.js` sobre o socket do Baileys:
 
-- **Trava de Instância (Lockfile):** Utiliza um arquivo `instance.lock` dentro de `.whatsapp-auth` para garantir que apenas um processo gerencie a conta por vez.
+- **Trava de Instância (Lockfile):** Utiliza um arquivo `hikari-process.lock` dentro de `.whatsapp-auth` para garantir que apenas um processo gerencie a conta por vez.
 - **Estratégia de Reconexão Exponencial:** Em caso de desconexão momentânea, o bot tenta reconectar até 5 vezes com esperas graduais de 10 a 120 segundos. O contador só zera após 2 minutos de conexão contínua estável.
 - **Isolamento de Erros:** Quedas de conexão ou limitação de taxa nunca derrubam a aplicação; o socket é recriado de maneira controlada preservando os caches de identidade e contexto.
 

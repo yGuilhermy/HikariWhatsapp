@@ -1,19 +1,20 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {Store} = require('../src/whatsapp/store');
-const {createRouter} = require('../src/whatsapp/router');
-const {createToolExecutor} = require('../src/whatsapp/tools');
-const {executeAgentLoop} = require('../src/handlers/llmHandler');
 async function main() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(),'hikari-tool-check-'));
     const report = {at:new Date().toISOString(),mode:'provedores e ferramentas reais; transporte WhatsApp simulado',tests:[]};
+    process.env.WHATSAPP_DATA_DIR = dir;
     try {
+        const {Store} = require('../src/whatsapp/store');
+        const {createRouter} = require('../src/whatsapp/router');
+        const {createToolExecutor} = require('../src/whatsapp/tools');
+        const {executeAgentLoop} = require('../src/handlers/llmHandler');
         const store = new Store(dir),senderId = '5500000000001@s.whatsapp.net';
         store.accept(senderId);
         const executor = createToolExecutor();
         const cases = [
-            {text:'Hikari, pesquise Node.js na web e me diga seu site oficial.',isGroup:true,expected:['search_web']},
+            {text:'Hikari, pesquise Node.js na web e me diga o site oficial do Node.js.',isGroup:true,expected:['search_web']},
             {text:'Consulte Portal 2 na Steam e converta 10 USD para BRL usando a cotação atual.',isGroup:false,expected:['check_steam','convert_currency']}
         ];
         for (const [i,entry] of cases.entries()) {
@@ -30,6 +31,7 @@ async function main() {
         }
         report.passed = report.tests.every(x=>x.passed);
         const destination = path.resolve(__dirname,'../docs/whatsapp/VALIDACAO_TOOLS.json');
+        fs.mkdirSync(path.dirname(destination),{recursive:true});
         fs.writeFileSync(destination,JSON.stringify(report,null,2)+'\n');
         console.log(JSON.stringify(report,null,2));
         if (!report.passed) process.exitCode = 1;

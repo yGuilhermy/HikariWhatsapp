@@ -116,17 +116,21 @@ class ProviderPool {
     }
     async complete(payload,signal,accept) {
         const withTools=Boolean(payload.tools?.length);
-        const deadline=Date.now()+Math.max(config.llmCompletionBudget,this.candidates(withTools).length*config.llmAttemptTimeout);
+        const providers=this.candidates(withTools);
+        const maxAttempts=config.llmMaxAttempts;
+        const deadline=Date.now()+Math.max(config.llmCompletionBudget,Math.min(providers.length,maxAttempts)*config.llmAttemptTimeout);
         const attemptsByFamily=new Map();let attempts=0,earliest=Infinity;
-        for(const provider of this.candidates(withTools)) {
+        for(const provider of providers) {
             signal?.throwIfAborted();
-            if(Date.now()>=deadline)break;
+            if(attempts>=maxAttempts||Date.now()>=deadline)break;
             const held=this.remaining(provider,withTools);
             if(held){earliest=Math.min(earliest,held);continue;}
-            const count=attemptsByFamily.get(provider.family)||0;
+            const budgetKey=provider.family==='gemini'?'gemini:'+provider.model:provider.family;
+            const count=attemptsByFamily.get(budgetKey)||0;
+            if(count>=config.llmMaxProviderAttempts)continue;
             const identity=scopes(provider,withTools).pair;
             if(this.inflight.has(identity))continue;
-            attempts++;attemptsByFamily.set(provider.family,count+1);this.inflight.add(identity);
+            attempts++;attemptsByFamily.set(budgetKey,count+1);this.inflight.add(identity);
             const request={...payload,model:provider.model};
             if(provider.family==='gemini'&&/^gemini-[34]/.test(provider.model))delete request.temperature;
             if(provider.family==='groq'){request.max_completion_tokens=request.max_tokens;delete request.max_tokens;}

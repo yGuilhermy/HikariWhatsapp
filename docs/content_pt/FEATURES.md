@@ -91,7 +91,7 @@ A Hikari oferece um módulo versátil de mídia:
 
 ## 🔍 7. Visão Computacional e Reconhecimento de Anime
 
-A ferramenta `identify_anime` integra-se com a API pública do **Trace.moe**:
+A ferramenta `anime_source` integra-se com a API pública do **Trace.moe**:
 
 - Ao anexar um frame, print ou imagem de animação com o comando `>anime`, a Hikari identifica o anime exato, o episódio e a minutagem aproximada da cena.
 

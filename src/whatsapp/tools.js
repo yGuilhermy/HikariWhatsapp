@@ -222,7 +222,7 @@ function createToolExecutor(overrides = {}) {
                 const response = await require('../utils/network').safeGet(args.url,{responseType:'arraybuffer',signal:ctx.signal,maxContentLength:10*1024*1024});
                 media = {buffer:Buffer.from(response.data),mimetype:response.headers['content-type']?.split(';')[0] || 'image/jpeg'};
             } else media = await ctx.getMedia();
-            if (!media || media.type && media.type !== 'image' || !media.mimetype.startsWith('image/')) throw new Error('Anexe ou cite uma imagem com !anime.');
+            if (!media || media.type && media.type !== 'image' || !media.mimetype.startsWith('image/')) throw new Error('Anexe ou cite uma imagem com '+(config.prefix || '>')+'anime.');
             return service.anime(media.buffer,media.mimetype,ctx.signal);
         }
         throw new Error('Ferramenta indisponível.');
