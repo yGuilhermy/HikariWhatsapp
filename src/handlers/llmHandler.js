@@ -192,7 +192,9 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
     for (const flag of ['mediaSent','audioSent','toolReplySent']) {
         Object.defineProperty(toolContext, flag,{get:()=>ctx[flag],set:value=>{ctx[flag]=value;}});
     }
-    const activeTools = ctx.wantsAudio ? tools : tools.filter(t => t.function.name !== 'send_voice_note');
+    const activeTools = tools.filter(({function: {name}}) =>
+        (name !== 'send_voice_note' || ctx.wantsAudio) &&
+        (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.mediaType === 'video')));
     const allowed = new Map(activeTools.map(t => [t.function.name, t.function.parameters]));
     const messages = [
         {role:'system',content:config.systemPrompt + '\n' + guidance + '\nData atual: ' +

@@ -26,7 +26,7 @@ if (require.main === module) {
         logger.event('system', 'starting', 'Hikari Zap: configuração carregada; iniciando conexão.');
         require('./src/whatsapp/client').start().catch(error => {
             logger.event('error', 'fatal', error);
-            process.exitCode = 1;
+            process.exit(1);
         });
     }
 }

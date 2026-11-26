@@ -1,7 +1,9 @@
 const fs = require('node:fs');
+const {AsyncLocalStorage} = require('node:async_hooks');
 const path = require('node:path');
 const config = require('../config');
 const {Store} = require('./store');
+const {Inbox} = require('./inbox');
 const {createRouter} = require('./router');
 const {logger} = require('../utils/logger');
 const {acquireSessionLock,createSendLimiter} = require('./runtime');
@@ -61,6 +63,12 @@ async function start({store = new Store()} = {}) {
     logger.system(state.creds.registered ? 'Sessão salva encontrada; validando login no WhatsApp.' : 'Sem login salvo; aguardando QR code para pareamento.');
     if (config.notifyOwnerOnConnect && !config.ownerNumbers.length) logger.warn('Configure WHATSAPP_OWNER_NUMBERS para receber a confirmação de conexão.');
     const router = createRouter({store});
+    const inbox = new Inbox(path.join(config.dataDir,'pending-requests'),wa.BufferJSON,reason => {
+        if (reason === 'delivery') logger.warn('Pedido recuperado com envio incerto; reenvio automático suprimido.');
+        else logger.warn('Pedido persistido vencido ou inválido descartado.');
+    });
+    const processing = new Set();
+    let replayTimer;
     const identities = new IdentityMap(path.join(config.dataDir,'identities.json'));
     process.once('exit',()=>identities.flush());
     const sentMessageKeys = new Set();
@@ -71,18 +79,24 @@ async function start({store = new Store()} = {}) {
         stopping = true;
         clearTimeout(timer);
         clearTimeout(stableTimer);
+        clearInterval(replayTimer);
         router.queue.pause();
         logger.event('warn', 'restricted', reason);
         const closing = socket;
         socket = null;
         closing?.end(new Error('Conexão interrompida por proteção local.'));
     }
-    const retryDelay = () => Math.min(120000,10000*2**attempts);
+    const retryDelay = () => Math.min(120000,10000*2**Math.min(attempts,4));
+    const sendSoundSticker = config.soundStickersEnabled
+        ? require('./soundSticker').createSoundStickerSender(wa)
+        : null;
+    const delivery = new AsyncLocalStorage();
     const sendLimited = createSendLimiter({
-        send:(current,jid,payload,options) => current.sendMessage(jid,payload,options),
+        send:(current,jid,payload,{beforeSend,...options}) => delivery.run(beforeSend, () => payload.stickerAudio && sendSoundSticker
+            ? sendSoundSticker(current,jid,payload,options,() => !stopping && socket === current)
+            : current.sendMessage(jid,payload,options)),
         isActive:current => !stopping && socket === current,
-        onRestricted:code => halt(`Envio recusado pelo WhatsApp (${code}); novos envios e reconexões interrompidos. Confira a conta no aplicativo oficial.`),
-        onLimit:() => logger.warn('Limite local de envios atingido; resposta suprimida para evitar rajada.')
+        onRestricted:code => halt(`Envio recusado pelo WhatsApp (${code}); novos envios e reconexões interrompidos. Confira a conta no aplicativo oficial.`)
     });
     const notifiedOwners = new Set();
     const notifyingOwners = new Set();
@@ -105,13 +119,9 @@ async function start({store = new Store()} = {}) {
     }
     function reconnect(delay) {
         if (stopping) return;
-        if (attempts >= 5) {
-            halt('Limite de cinco reconexões atingido; sessão preservada. Confira a conta antes de iniciar novamente.');
-            return;
-        }
         attempts++;
         clearTimeout(timer);
-        logger.info(`Reconexão ${attempts}/5 agendada em ${Math.ceil(delay/1000)} segundos.`);
+        logger.info(`Reconexão ${attempts} agendada em ${Math.ceil(delay/1000)} segundos.`);
         timer = setTimeout(() => connect().catch(() => {
             logger.error('Falha ao reconectar usando a sessão salva.');
             if (!stopping) reconnect(retryDelay());
@@ -122,7 +132,12 @@ async function start({store = new Store()} = {}) {
         await saveChain;
         if (stopping) return;
         socket = wa.default({auth:state,logger:pino({level:'silent'}),markOnlineOnConnect:false,syncFullHistory:false,
-            shouldSyncHistoryMessage:() => false});
+            shouldSyncHistoryMessage:() => false,defaultQueryTimeoutMs:45000,
+            patchMessageBeforeSending:message => {
+                delivery.getStore()?.();
+                return message;
+            }
+        });
         const currentSocket = socket;
         const learnContacts = contacts => {
             if(stopping||socket!==currentSocket)return;
@@ -157,11 +172,24 @@ async function start({store = new Store()} = {}) {
                 stableTimer = setTimeout(() => { attempts = 0; },120000);
                 logger.event('system', 'online', 'Login confirmado. Hikari Zap conectada; chats privados e grupos.');
                 notifyOwners(currentSocket).catch(() => logger.warn('Falha na confirmação ao proprietário.'));
+                const recover = () => {
+                    if (stopping || socket !== currentSocket || router.queue.paused) return;
+                    try {
+                        for (const [id,record] of inbox.recovered(id=>processing.has(id))) {
+                            if (router.queue.canAccept(record.chatId)) dispatch(record.raw,true);
+                        }
+                    } catch (error) { logger.error('Falha ao recuperar a fila:',error); }
+                };
+                clearInterval(replayTimer);
+                replayTimer = setInterval(recover,2000);
+                recover();
             }
             if (update.connection === 'close') {
                 const persist = saveCreds;
                 saveChain = saveChain.then(persist).catch(() => logger.error('Falha ao salvar sessão WhatsApp.'));
                 socket = null;
+                router.cancelPending();
+                clearInterval(replayTimer);
                 clearTimeout(timer);
                 clearTimeout(stableTimer);
                 const error = update.lastDisconnect?.error;
@@ -177,74 +205,124 @@ async function start({store = new Store()} = {}) {
                 reconnect(code === wa.DisconnectReason.restartRequired ? 1000 : retryDelay());
             }
         });
+        let lastProgressAt = 0;
+        function dispatch(raw,recovered = false) {
+            if (stopping || socket !== currentSocket || !raw.key?.id) return;
+            const requestId = inbox.key(raw);
+            if (processing.has(requestId) || (!recovered && inbox.pending.has(requestId))) return;
+            const normalized = normalizeIncoming(raw,wa.normalizeMessageContent,{botJids:[socket.user?.id,socket.user?.lid,state.creds.me?.id,state.creds.me?.lid],sentMessageKeys,identities});
+            if (!normalized) {
+                if (recovered) inbox.finish(requestId);
+                return;
+            }
+            normalized.recovered = recovered;
+            let persisted = recovered;
+            normalized.persist = () => {
+                inbox.admit(requestId,{raw,chatId:normalized.chatId,at:Date.now()});
+                persisted = true;
+            };
+            let attemptedSend = false;
+            Object.defineProperty(normalized,'allowProgress',{get() {
+                const now = Date.now();
+                if (now - lastProgressAt < 4000) return false;
+                lastProgressAt = now;
+                return true;
+            }});
+            logger.event('zap', 'incoming', `Mensagem recebida de "${normalized.senderName}" (${normalized.senderId}) no chat ${normalized.chatId} [${normalized.isGroup ? 'GRUPO' : 'PRIVADO'}] | Texto: "${normalized.text}"${normalized.hasMedia ? ` | Anexo: ${normalized.mediaType}` : ''}`);
+            let mediaPromise;
+            normalized.getMedia = signal => mediaPromise ||= (async () => {
+                const node = normalized.mediaNode;
+                if (!node) return null;
+                if (Number(node.fileLength || 0) > config.maxMediaBytes) throw new Error('Anexo acima do limite de mídia.');
+                const mediaSignal = signal ? AbortSignal.any([signal,AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000);
+                const stream = await wa.downloadContentFromMessage(node,normalized.mediaType,{options:{signal:mediaSignal,timeout:45000}});
+                const abort = () => stream.destroy(mediaSignal.reason);
+                mediaSignal.addEventListener('abort',abort,{once:true});
+                const chunks = [];
+                let size = 0;
+                try {
+                    mediaSignal.throwIfAborted();
+                    for await (const chunk of stream) {
+                        size += chunk.length;
+                        if (size > config.maxMediaBytes) throw new Error('Anexo acima do limite de mídia.');
+                        chunks.push(chunk);
+                    }
+                } finally { mediaSignal.removeEventListener('abort',abort); stream.destroy(); }
+                return {buffer:Buffer.concat(chunks),mimetype:node.mimetype || ({image:'image/jpeg',video:'video/mp4',sticker:'image/webp',audio:'audio/ogg'}[normalized.mediaType]),type:normalized.mediaType};
+            })();
+            normalized.react = async emoji => {
+                try {
+                    if (stopping || socket !== currentSocket) return;
+                    logger.zap(`Reagindo com "${emoji || 'remover'}" na mensagem ${raw.key.id}`);
+                    await currentSocket.sendMessage(normalized.transportJid, { react: { text: String(emoji || ''), key: raw.key } });
+                } catch {}
+            };
+            normalized.delete = async () => {
+                try {
+                    if (stopping || socket !== currentSocket) return false;
+                    logger.zap(`Excluindo mensagem ${raw.key.id} no chat ${normalized.transportJid}`);
+                    await currentSocket.sendMessage(normalized.transportJid, { delete: raw.key });
+                    return true;
+                } catch (err) {
+                    logger.warn(`Não foi possível excluir a mensagem: ${err.message}`);
+                    return false;
+                }
+            };
+            let readReceiptAttempted = false;
+            normalized.send = async (payload, options = {}) => {
+                const targetJid = options.targetJid || payload.targetJid || normalized.transportJid;
+                const sendReply = async content => {
+                    if (stopping || socket !== currentSocket) throw new Error('Conexão WhatsApp interrompida; tente novamente após reconectar.');
+                    const sendOptions = targetJid === normalized.transportJid ? { quoted: raw } : {};
+                    if (content.audio || content.video || content.document || content.image || content.sticker) {
+                        sendOptions.mediaUploadTimeoutMs = 45000;
+                    }
+                    if (content.stickerAudio) sendOptions.soundStickerSignal = options.signal;
+                    sendOptions.beforeSend = () => {
+                        options.signal?.throwIfAborted();
+                        if (stopping || socket !== currentSocket) throw new Error('Conexão interrompida antes do envio.');
+                        if (attemptedSend) return;
+                        inbox.markSending(requestId);
+                        attemptedSend = true;
+                    };
+                    const sent = await sendLimited(currentSocket, targetJid, content, sendOptions, options.signal);
+                    if (sent) logger.event('zap', 'outgoing', `Resposta enviada para ${targetJid}: ${typeof content.text === 'string' ? content.text : Object.keys(content).join(', ')}`);
+                    if (sent?.key?.id) {
+                        sentMessageKeys.add(`${targetJid}:${sent.key.id}`);
+                        if (sentMessageKeys.size > 2000) sentMessageKeys.delete(sentMessageKeys.values().next().value);
+                    }
+                    if (!readReceiptAttempted && targetJid === normalized.transportJid && !stopping && socket === currentSocket) {
+                        readReceiptAttempted = true;
+                        void Promise.resolve().then(() => currentSocket.readMessages([raw.key])).catch(() => {
+                            logger.warn('Resposta enviada, mas não foi possível confirmar a leitura da mensagem.');
+                        });
+                    }
+                    return sent;
+                };
+                for (const value of Object.values(payload)) if (Buffer.isBuffer(value) && value.length > config.maxMediaBytes) throw new Error('Arquivo acima do limite de envio.');
+                if (typeof payload.text === 'string') {
+                    return sendReply({text:payload.text.slice(0,24000)});
+                }
+                const cleanPayload = {...payload};
+                delete cleanPayload.targetJid;
+                return sendReply(cleanPayload);
+            };
+            processing.add(requestId);
+            let defer = false;
+            void router.handle(normalized).catch(error => {
+                defer = recovered && ['QUEUE_FULL','QUEUE_PAUSED'].includes(error.code);
+                if (!defer) logger.error('Falha ao processar mensagem WhatsApp:',error);
+            }).finally(() => {
+                try {
+                    if (persisted && !defer && (attemptedSend || (!stopping && socket === currentSocket))) inbox.finish(requestId);
+                } catch (error) { logger.error('Falha ao finalizar pedido na fila:',error); }
+                finally { processing.delete(requestId); }
+            });
+        }
         currentSocket.ev.on('messages.upsert',event => {
             if (stopping || socket !== currentSocket || event.type !== 'notify') return;
             for (const raw of event.messages) {
-                const normalized = normalizeIncoming(raw,wa.normalizeMessageContent,{botJids:[socket.user?.id,socket.user?.lid,state.creds.me?.id,state.creds.me?.lid],sentMessageKeys,identities});
-                if (!normalized) continue;
-                logger.event('zap', 'incoming', `Mensagem recebida de "${normalized.senderName}" (${normalized.senderId}) no chat ${normalized.chatId} [${normalized.isGroup ? 'GRUPO' : 'PRIVADO'}] | Texto: "${normalized.text}"${normalized.hasMedia ? ` | Anexo: ${normalized.mediaType}` : ''}`);
-                let mediaPromise;
-                normalized.getMedia = () => mediaPromise ||= (async () => {
-                    const node = normalized.mediaNode;
-                    if (!node) return null;
-                    if (Number(node.fileLength || 0) > config.maxMediaBytes) throw new Error('Anexo acima do limite de mídia.');
-                    const stream = await wa.downloadContentFromMessage(node,normalized.mediaType);
-                    const chunks = [];
-                    let size = 0;
-                    try {
-                        for await (const chunk of stream) {
-                            size += chunk.length;
-                            if (size > config.maxMediaBytes) throw new Error('Anexo acima do limite de mídia.');
-                            chunks.push(chunk);
-                        }
-                    } finally { stream.destroy(); }
-                    return {buffer:Buffer.concat(chunks),mimetype:node.mimetype || ({image:'image/jpeg',video:'video/mp4',sticker:'image/webp',audio:'audio/ogg'}[normalized.mediaType]),type:normalized.mediaType};
-                })();
-                normalized.react = async emoji => {
-                    try {
-                        if (stopping || socket !== currentSocket) return;
-                        logger.zap(`Reagindo com "${emoji || 'remover'}" na mensagem ${raw.key.id}`);
-                        await currentSocket.sendMessage(normalized.transportJid, { react: { text: String(emoji || ''), key: raw.key } });
-                    } catch {}
-                };
-                normalized.delete = async () => {
-                    try {
-                        if (stopping || socket !== currentSocket) return false;
-                        logger.zap(`Excluindo mensagem ${raw.key.id} no chat ${normalized.transportJid}`);
-                        await currentSocket.sendMessage(normalized.transportJid, { delete: raw.key });
-                        return true;
-                    } catch (err) {
-                        logger.warn(`Não foi possível excluir a mensagem: ${err.message}`);
-                        return false;
-                    }
-                };
-                let readReceiptAttempted = false;
-                normalized.send = async (payload, options = {}) => {
-                    const targetJid = options.targetJid || payload.targetJid || normalized.transportJid;
-                    const sendReply = async content => {
-                        if (stopping || socket !== currentSocket) throw new Error('Conexão WhatsApp interrompida; tente novamente após reconectar.');
-                        const sent = await sendLimited(currentSocket,targetJid,content,targetJid === normalized.transportJid ? {quoted:raw} : {});
-                        if (sent) logger.event('zap', 'outgoing', `Resposta enviada para ${targetJid}: ${typeof content.text === 'string' ? content.text : Object.keys(content).join(', ')}`);
-                        if (sent?.key?.id) {
-                            sentMessageKeys.add(`${targetJid}:${sent.key.id}`);
-                            if (sentMessageKeys.size > 2000) sentMessageKeys.delete(sentMessageKeys.values().next().value);
-                        }
-                        if (!readReceiptAttempted && targetJid === normalized.transportJid && !stopping && socket === currentSocket) {
-                            readReceiptAttempted = true;
-                            try { await currentSocket.readMessages([raw.key]); }
-                            catch { logger.warn('Resposta enviada, mas não foi possível confirmar a leitura da mensagem.'); }
-                        }
-                        return sent;
-                    };
-                    for (const value of Object.values(payload)) if (Buffer.isBuffer(value) && value.length > config.maxMediaBytes) throw new Error('Arquivo acima do limite de envio.');
-                    if (typeof payload.text === 'string') {
-                        return sendReply({text:payload.text.slice(0,24000)});
-                    }
-                    const cleanPayload = {...payload};
-                    delete cleanPayload.targetJid;
-                    return sendReply(cleanPayload);
-                };
-                router.handle(normalized).catch(err => logger.error('Falha ao processar mensagem WhatsApp:', err));
+                try { dispatch(raw); } catch (error) { logger.error('Falha ao receber pedido:',error); }
             }
         });
     }

@@ -29,6 +29,7 @@ for(const [name,key] of Object.entries(envMap)) {
 config.dataDir=path.resolve(root,process.env.WHATSAPP_DATA_DIR||'src/data/zap');
 config.authDir=path.resolve(root,process.env.WHATSAPP_AUTH_DIR||'.whatsapp-auth');
 config.ownerNumbers=[...new Set((process.env.WHATSAPP_OWNER_NUMBERS||'').split(',').map(x=>x.replace(/[+()\s-]/g,'')).filter(x=>/^\d{8,15}$/.test(x)&&x!=='5500000000000'))];
+config.soundStickersEnabled=process.env.WHATSAPP_SOUND_STICKERS==='true';
 config.notifyOwnerOnConnect=process.env.WHATSAPP_NOTIFY_OWNER==='true';
 config.maxMediaBytes=Number(process.env.WHATSAPP_MAX_MEDIA_MB||16)*1048576;
 config.llmTimeout=Number(process.env.LLM_TIMEOUT_MS||30000);

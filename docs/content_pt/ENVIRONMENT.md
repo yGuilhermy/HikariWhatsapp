@@ -144,3 +144,15 @@ Ao definir `GEMINI_API_KEY` com valores separados por vírgula, o pool alterna e
 ## Prazos e limites do agente
 
 `LLM_ATTEMPT_TIMEOUT_MS` deve caber em `LLM_COMPLETION_BUDGET_MS`, que deve caber em `LLM_AGENT_BUDGET_MS`. O orçamento do agente deve caber em `QUEUE_TASK_TIMEOUT_MS`. Rode `npm run config:check` antes de iniciar e consulte a [referência de variáveis](https://projetohikari.com/docs/referencia/variaveis-ambiente/) para os valores padrão.
+
+## Figurinhas com som
+
+Use WHATSAPP_SOUND_STICKERS=true para disponibilizar >sticker_som [nome] e o MCP create_sound_sticker.
+
+## Fila, recuperação e grupos movimentados
+
+O Zap processa até dois pedidos de chats diferentes por padrão e mantém um pedido ativo por chat. Configure a capacidade com QUEUE_MAX_PENDING, QUEUE_MAX_PER_CHAT e QUEUE_WAIT_TIMEOUT_MS. A fila aguarda a janela de envio em vez de ignorar pedidos que encontram o limite local. Se a fila estiver cheia, a ampulheta indica que o pedido novo não entrou.
+
+Pedidos aceitos são gravados temporariamente em pending-requests, dentro de WHATSAPP_DATA_DIR, com acesso restrito ao usuário do processo. Os registros guardam a mensagem necessária para retomar o pedido, inclusive referências a anexos, e são removidos ao concluir ou expirar. A recuperação tem uma janela de 15 minutos e depende de a mídia original ainda estar disponível. Se o processo cair após começar a transmitir uma resposta, o bot não repete o envio automaticamente, pois o WhatsApp pode já tê-lo entregue.
+
+Em produção, rode o Zap sob um supervisor que reinicie em caso de falha. No servidor do projeto, use systemctl --user status hikari-zap e journalctl --user -u hikari-zap para acompanhar o serviço. O serviço e o tmux não devem rodar duas cópias com a mesma sessão.

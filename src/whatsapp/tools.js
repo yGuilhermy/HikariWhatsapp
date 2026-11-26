@@ -27,6 +27,7 @@ function createToolExecutor(overrides = {}) {
         searchGames: (...a) => require('../services/torrentService').searchGames(...a),
         torrentFile: (...a) => require('../services/torrentService').getTorrentOrMagnet(...a),
         image: (...a) => require('../handlers/imageHandler').generateImage(...a),
+        soundSticker: (...a) => require('../services/stickerService').toSoundSticker(...a),
         sticker: (...a) => require('../services/stickerService').toSticker(...a),
         voice: (...a) => require('../services/ttsService').synthesizeVoiceAudio(...a),
         download: (...a) => require('../services/mediaService').download(...a),
@@ -41,6 +42,15 @@ function createToolExecutor(overrides = {}) {
         if (ctx.onToolStart) await ctx.onToolStart(name);
         ctx.signal?.throwIfAborted();
         logger.event('tool', 'tool', `Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
+        if (name === 'create_sound_sticker') {
+            if (!config.soundStickersEnabled) return {error:'Figurinhas com som estão desativadas nesta instância.'};
+            const media = await ctx.getMedia();
+            const sticker = await service.soundSticker(media,ctx.signal,args.name || '');
+            ctx.signal?.throwIfAborted();
+            await ctx.send(sticker);
+            ctx.mediaSent = true;
+            return {ok:true,message:'Figurinha com som enviada.'};
+        }
         if (name === 'create_sticker') {
             const media = await ctx.getMedia();
             const sticker = await service.sticker(media,ctx.signal,args.description || '');

@@ -1,3 +1,4 @@
+const { setTimeout: delay } = require('node:timers/promises');
 const fs = require('node:fs');
 const path = require('node:path');
 const {randomUUID} = require('node:crypto');
@@ -31,44 +32,66 @@ function acquireSessionLock(directory) {
     throw new Error('Não foi possível reservar a sessão WhatsApp para esta instância.');
 }
 
-function createSendLimiter({send,isActive,onRestricted,onLimit}) {
-    let chain = Promise.resolve(), pending = 0, lastAttempt = 0;
+function createSendLimiter({
+    send,isActive,onRestricted,onLimit,windowMs=60000,minGapMs=2000,
+    globalLimit=20,chatLimit=6,now=Date.now,sleep=delay
+}) {
+    let transport = Promise.resolve();
+    let pending = 0;
+    let lastAttempt = -Infinity;
     let recent = [];
     const byChat = new Map();
-    const suppressed = message => Object.assign(new Error(message),{silent:true});
-    return async (socket,jid,payload,options) => {
-        if (pending >= 20) throw suppressed('Fila de envios cheia.');
+    const unavailable = () => Object.assign(new Error('Conexão interrompida antes do envio.'),{silent:true});
+
+    return async (socket,jid,payload,options = {},signal) => {
+        signal?.throwIfAborted();
+        if (pending >= 20) {
+            throw Object.assign(new Error('Fila de envios cheia.'),{code:'SEND_QUEUE_FULL'});
+        }
         pending++;
-        const task = chain.then(async () => {
-            if (!isActive(socket)) throw suppressed('Conexão interrompida antes do envio.');
-            const wait = Math.max(0,lastAttempt+2000-Date.now());
-            if (wait) await new Promise(resolve => setTimeout(resolve,wait));
-            if (!isActive(socket)) throw suppressed('Conexão interrompida antes do envio.');
-            const now = Date.now();
-            recent = recent.filter(at => now-at<60000);
-            for (const [chat,times] of byChat) {
-                const live = times.filter(at => now-at<60000);
-                if (live.length) byChat.set(chat,live); else byChat.delete(chat);
+        try {
+            for (;;) {
+                signal?.throwIfAborted();
+                if (!isActive(socket)) throw unavailable();
+                const busy = transport;
+                await busy;
+                if (busy !== transport) continue;
+                signal?.throwIfAborted();
+                if (!isActive(socket)) throw unavailable();
+                const at = now();
+                recent = recent.filter(time=>at-time<windowMs);
+                for (const [chat,times] of byChat) {
+                    const live = times.filter(time=>at-time<windowMs);
+                    if (live.length) byChat.set(chat,live); else byChat.delete(chat);
+                }
+                const times = byChat.get(jid) || [];
+                const wait = Math.max(0,lastAttempt+minGapMs-at,
+                    recent.length>=globalLimit ? recent[0]+windowMs-at : 0,
+                    times.length>=chatLimit ? times[0]+windowMs-at : 0);
+                if (wait) {
+                    onLimit?.();
+                    try { await sleep(wait,undefined,{signal}); }
+                    catch (error) { throw signal?.reason || error; }
+                    continue;
+                }
+                lastAttempt = at;
+                recent.push(at);
+                byChat.set(jid,[...times,at]);
+                const sending = Promise.resolve().then(async () => {
+                    try { return await send(socket,jid,payload,options); }
+                    catch (error) {
+                        const code = Number(error?.output?.statusCode || error?.statusCode || error?.response?.status);
+                        if ([401,403,429].includes(code)) {
+                            onRestricted(code);
+                            error.silent = true;
+                        }
+                        throw error;
+                    }
+                });
+                transport = sending.catch(() => {});
+                return await sending;
             }
-            const times = byChat.get(jid) || [];
-            if (recent.length >= 20 || times.length >= 6) {
-                onLimit();
-                throw suppressed('Limite local de envios atingido; envio suprimido.');
-            }
-            // Failed or ambiguous attempts count too. Never resend automatically.
-            lastAttempt = now;
-            recent.push(now);
-            byChat.set(jid,[...times,now]);
-            try { return await send(socket,jid,payload,options); }
-            catch (error) {
-                const code = Number(error?.output?.statusCode || error?.statusCode || error?.response?.status);
-                if ([401,403,429].includes(code)) onRestricted(code);
-                error.silent = true;
-                throw error;
-            }
-        });
-        chain = task.catch(() => {});
-        try { return await task; } finally { pending--; }
+        } finally { pending--; }
     };
 }
 module.exports = {acquireSessionLock,createSendLimiter};

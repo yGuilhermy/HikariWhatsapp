@@ -8,6 +8,14 @@
     }
   },
   {
+    "type":"function",
+    "function":{
+      "name":"create_sound_sticker",
+      "description":"Cria e envia uma figurinha com o áudio do vídeo anexado ou citado, usando até os primeiros 5 segundos. Use quando a pessoa pedir figurinha com som ou pedir para preservar o áudio. Não use com imagens nem invente nome. Não envie texto redundante depois.",
+      "parameters":{"type":"object","properties":{"name":{"type":"string","description":"Nome opcional informado explicitamente pelo usuário. Se omitido, usa projetohikari.com. O autor é sempre Hikari Bot."}},"required":[]}
+    }
+  },
+  {
     "type": "function",
     "function": {
       "name": "search_game",

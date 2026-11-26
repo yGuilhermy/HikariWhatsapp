@@ -4,19 +4,20 @@ const path = require('node:path');
 const sharp = require('sharp');
 const config = require('../config');
 const {run} = require('./mediaService');
+const {mediaError} = require('./mediaErrors');
 
 // Same canvas and animated duration/size limits as the reference project.
 const SIZE = 512;
 const ANIMATED_LIMIT = 500 * 1024;
 const STATIC_LIMIT = 100 * 1024;
 const DESCRIPTION_LIMIT = 128;
-function withDescription(webp, text) {
+function withDescription(webp, text, publisher = 'Hikari') {
     const description = Array.from(String(text || '').trim()).slice(0,DESCRIPTION_LIMIT).join('');
     if (!description) return webp;
     const metadata = Buffer.from(JSON.stringify({
         'sticker-pack-id':'hikari-zap',
         'sticker-pack-name':description,
-        'sticker-pack-publisher':'Hikari',
+        'sticker-pack-publisher':publisher,
         emojis:[]
     }),'utf8');
     // WhatsApp sticker metadata: TIFF with the JSON payload in tag 0x5741.
@@ -74,6 +75,21 @@ async function toSticker(media, signal, description = '') {
         }
         throw new Error('A figurinha ultrapassou 100 KB; tente outra imagem.');
     }
+    return encodeAnimated(media, signal, description, false);
+}
+
+async function toSoundSticker(media, signal, name) {
+    if (media?.type !== 'video') {
+        throw mediaError('STICKER_SOUND_INPUT', 'Envie ou cite um vídeo com áudio usando >sticker som <nome>.');
+    }
+    validate(media, ['video']);
+    return encodeAnimated(media, signal, name?.trim() || 'projetohikari.com', true);
+}
+
+async function encodeAnimated(media, signal, description, withSound) {
+    signal?.throwIfAborted();
+    const duration = withSound ? '5' : '10';
+    const inputOptions = withSound ? ['-protocol_whitelist','file,pipe','-format_whitelist','mov,mp4,m4a,3gp,3g2,mj2,matroska,webm'] : [];
     const directory = fs.mkdtempSync(path.join(os.tmpdir(),'hikari-sticker-'));
     try {
         const input = path.join(directory,'input');
@@ -81,15 +97,37 @@ async function toSticker(media, signal, description = '') {
         fs.writeFileSync(input,media.buffer);
         for (const [fps,quality] of [[15,60],[12,45],[10,30],[8,20]]) {
             signal?.throwIfAborted();
-            await run(config.ffmpegPath || 'ffmpeg', ['-hide_banner','-loglevel','error','-y','-t','10','-i',input,
+            await run(config.ffmpegPath || 'ffmpeg', ['-hide_banner','-loglevel','error','-y','-filter_threads','1',...inputOptions,'-threads','1','-t',duration,'-i',input,
                 '-vf',`fps=${fps},scale=w='iw*sar':h=ih,setsar=1,scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-c:v','libwebp','-q:v',String(quality),'-loop','0','-an',output], {signal,timeout:30000});
-            const buffer = withDescription(fs.readFileSync(output),description);
-            if (buffer.length <= ANIMATED_LIMIT) return buffer;
+            const sticker = withDescription(fs.readFileSync(output),description,withSound ? 'Hikari Bot' : undefined);
+            if (sticker.length > ANIMATED_LIMIT) continue;
+            if (!withSound) return sticker;
+
+            const {delay} = await sharp(sticker,{animated:true}).metadata();
+            const animationMs = delay?.reduce((total, frame) => total + frame, 0);
+            if (!animationMs) {
+                throw mediaError('STICKER_SOUND_ANIMATION', 'Use um vídeo com movimento para criar a figurinha com som.');
+            }
+            const audioPath = path.join(directory,'sound.ogg');
+            try {
+                await run(config.ffmpegPath || 'ffmpeg', ['-hide_banner','-loglevel','error','-y',...inputOptions,
+                    '-i',input,'-map','0:a:0','-vn','-af','aresample=48000:async=1:first_pts=0,apad',
+                    '-t',(Math.min(animationMs,5000)/1000).toFixed(3),'-ac','1','-c:a','libopus','-b:a','32k',audioPath],
+                    {signal,timeout:30000});
+            } catch (error) {
+                if (signal?.aborted || error.code === 'ENOENT' || (error.code && !['MEDIA_PROCESS_FAILED','MEDIA_NO_FILE'].includes(error.code))) throw error;
+                throw mediaError('STICKER_SOUND_NO_AUDIO', 'Não consegui extrair o som. Confira se o vídeo tem uma faixa de áudio.');
+            }
+            const stickerAudio = fs.readFileSync(audioPath);
+            if (stickerAudio.length < 128) {
+                throw mediaError('STICKER_SOUND_NO_AUDIO', 'Não encontrei áudio utilizável nesse vídeo.');
+            }
+            return {sticker,stickerAudio,stickerAudioSeconds:Math.max(1,Math.round(Math.min(animationMs,5000)/1000))};
         }
         throw new Error('A figurinha animada ultrapassou 500 KB; tente um trecho mais curto ou simples.');
     } catch (error) {
-        if (error.name === 'AbortError' || signal?.aborted) throw error;
+        if (error.name === 'AbortError' || signal?.aborted || error.publicMessage) throw error;
         if (error.code === 'ENOENT') throw new Error('Configure o FFmpeg para criar figurinhas de GIFs e vídeos.');
         throw new Error(`Não foi possível criar a figurinha animada. ${error.message}`);
     } finally { fs.rmSync(directory,{recursive:true,force:true}); }
@@ -106,4 +144,4 @@ async function stickerToImage(media, signal) {
     if (buffer.length > config.maxMediaBytes) throw new Error('Imagem acima do limite de envio.');
     return buffer;
 }
-module.exports = {toSticker,stickerToImage};
+module.exports = {toSticker,toSoundSticker,stickerToImage};

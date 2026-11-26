@@ -3,11 +3,13 @@ const {Queue} = require('./queue');
 const {chatJid} = require('./jid');
 const {createToolExecutor} = require('./tools');
 const {logger} = require('../utils/logger');
-const TOOL_REACTIONS = {search_web:'🔎',check_steam:'🎮',search_game:'🧲',download_game_torrent:'📦',convert_currency:'💱',generate_image:'🎨',create_sticker:'✂️',sticker_to_image:'🖼️',download_video:'🎬',download_audio:'🎵',search_and_download_music:'🎵',send_voice_note:'🎙️',anime_source:'🔍'};
+const MEDIA_DOWNLOADS = new Set(['download_audio','download_video','search_and_download_music']);
+const MEDIA_COMMANDS = new Set(['sticker_som','baixar_audio','baixar_musica','baixar_video','musica','baixar_musica_deezer']);
+const TOOL_REACTIONS = {search_web:'🔎',check_steam:'🎮',search_game:'🧲',download_game_torrent:'📦',convert_currency:'💱',generate_image:'🎨',create_sticker:'✂️',create_sound_sticker:'✂️',sticker_to_image:'🖼️',download_video:'🎬',download_audio:'🎵',search_and_download_music:'🎵',send_voice_note:'🎙️',anime_source:'🔍'};
 const TOOL_LABELS = {
     search_web:'Pesquisa web', check_steam:'Steam', convert_currency:'Conversão de moedas',
     search_game:'Busca de jogos', download_game_torrent:'Envio de torrent', generate_image:'Geração de imagem',
-    create_sticker:'Figurinha', sticker_to_image:'Imagem da figurinha', download_audio:'Download de áudio',
+    create_sticker:'Figurinha', create_sound_sticker:'Figurinha com som', sticker_to_image:'Imagem da figurinha', download_audio:'Download de áudio',
     download_video:'Download de vídeo', search_and_download_music:'Deezer', send_voice_note:'Áudio de voz',
     anime_source:'Identificação de anime'
 };
@@ -41,13 +43,14 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 
 *🎬 MÍDIA & DOWNLOADS*
 • \`${p}view\` — Reenvia mensagem, imagem, vídeo, áudio ou sticker citado
-• \`${p}musica <nome e artista>\` — Baixa faixas pelo Deezer em áudio nativo
+• \`${p}musica <nome e artista>\` — Busca faixas no Deezer (áudio MP3 ou arquivo FLAC). Para escolher de uma lista, use \`${p}musica #1\`
 • \`${p}baixar_video <link>\` — Baixa vídeos (Instagram, TikTok, YouTube, X)
 • \`${p}baixar_audio <link>\` — Extrai áudio de vídeos da internet
 • \`${p}buscar_jogo <nome>\` — Busca jogos nos catálogos locais e lista até 5 resultados
 • \`${p}torrent <nome ou número>\` — Busca por nome ou envia o arquivo do resultado escolhido
 • \`${p}imagem <descrição>\` — Gera imagens por inteligência artificial
 • \`${p}sticker [descrição]\` — Imagem, GIF ou vídeo em figurinha (até 10 s; descrição até 128 caracteres)
+• \`${p}sticker_som [nome]\` — Figurinha experimental com o som de um vídeo (até 5 s)
 • \`${p}toimg\` ou \`${p}sticker2image\` — Converte figurinha estática em PNG ou animada em GIF
 
 *🎙️ VOZ & TRANSCRIÇÃO*
@@ -146,6 +149,13 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
     if (process.env.HIKARI_START_PAUSED === 'true') queue.pause();
     const ownerQueue = new Queue(config.maxQueue,{...queueOptions(),concurrency:1});
     const availabilityNotices = new Map();
+    const signalBackpressure = async message => {
+        const now = Date.now();
+        if (now - (availabilityNotices.get(message.chatId) || 0) < 15000) return;
+        if (availabilityNotices.size >= 100) availabilityNotices.delete(availabilityNotices.keys().next().value);
+        availabilityNotices.set(message.chatId,now);
+        await message.react?.('⏳').catch(() => {});
+    };
     agent ||= (...args) => require('../handlers/llmHandler').executeAgentLoop(...args);
     transcribe ||= async (media, signal) => {
         const wav = await require('../services/mediaService').toWav(media.buffer,signal);
@@ -158,6 +168,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
     describe ||= (media, signal) => require('../handlers/imageVisionHandler').describeImage(media.buffer,media.mimetype,signal);
     return {
         queue,
+        cancelPending() { queue.cancel(); ownerQueue.cancel(); },
         async handle(message) {
             if (!message || message.fromMe || !chatJid(message.chatId) || !/^\d+@(s\.whatsapp\.net|lid)$/.test(message.senderId || '') || !message.id) return;
             const senderId = message.senderId;
@@ -169,13 +180,17 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                 else if (notify && (payload.image || payload.video || payload.document)) output = {...payload,caption:payload.caption ? `${payload.caption}\n\n${note}` : note};
                 const sent = await message.send(output, options);
                 if (notify) {
-                    if (output === payload) await message.send({text:note});
-                    store.markHelpNotified(senderId);
+                    try {
+                        if (output === payload) await message.send({text:note}, options);
+                        store.markHelpNotified(senderId);
+                    } catch (error) {
+                        logger.warn('A resposta foi entregue, mas a dica de ajuda não foi enviada: ' + error.message);
+                    }
                 }
                 return sent;
             };
             const isOwner = [senderId,...(message.senderAliases || [])].some(id=>config.isOwner(id));
-            if (store.seen(`${message.chatId}:${message.id}`)) return;
+            if (!message.recovered && store.seen(`${message.chatId}:${message.id}`)) return;
             const cmd = command(message.text);
             const choiceText = String(message.text || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
             const choice = choiceText.match(/^(?:(?:eu\s+)?(?:quero|manda|mande|envia|envie|baixa|baixe|pega|pegue|escolho|seleciona|selecione)\s+)?(?:(?:o|a|numero|opcao|resultado|jogo)\s+)*(\d+|primeiro|primeira|segundo|segunda|terceiro|terceira|quarto|quarta|quinto|quinta)(?:\s+(?:por favor|pfv|pf|pra mim|para mim))?[.!]?$/);
@@ -220,29 +235,36 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             }
             if ((message.text || '').length > 8000) return sendText('Envie até 8000 caracteres por mensagem.');
             if (!message.text && !message.hasMedia) return;
+            let mediaAttempted = MEDIA_COMMANDS.has(cmd.name);
             try {
-                return await (isOwner && queue.paused ? ownerQueue : queue).enqueue(message.chatId,async signal => {
+                return await (isOwner && queue.paused ? ownerQueue : queue).enqueue(message.chatId,async (signal, hold) => {
                     let reacted = '';
                     const markReact = async name => {
+                        if (message.isGroup && !message.allowProgress) return;
                         const emoji = TOOL_REACTIONS[name] || '⏳';
                         if (reacted !== emoji && message.react) {
                             reacted = emoji;
-                            await message.react(emoji);
+                            await message.react(emoji).catch(() => {});
                         }
                     };
                     try {
-                        const ctx = {...message,store,isOwner,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
+                        const ctx = {...message,store,isOwner,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
                             signal.throwIfAborted();
-                            options = { ...options, signal: options.signal || signal };
+                            const isMedia = Boolean(payload.audio || payload.image || payload.video || payload.document || payload.sticker);
+                            const send = () => sendReply(payload, { ...options, signal: options.signal || signal });
+                            const sent = await hold(send);
                             if (payload.audio) ctx.audioSent = true;
-                            if (payload.audio || payload.image || payload.video || payload.document || payload.sticker) ctx.mediaSent = true;
-                            const sent = await sendReply(payload, options);
+                            if (isMedia) ctx.mediaSent = true;
                             const summary = payload.text || payload.caption;
                             if (summary) store.addHistory(message.chatId,'assistant',summary);
                             return sent;
                         }};
                         signal.throwIfAborted();
-                        const tool = (name,args) => executeTool(name,args,ctx);
+                        const execute = (name, args, context) => {
+                            if (MEDIA_DOWNLOADS.has(name)) mediaAttempted = true;
+                            return hold(() => executeTool(name, args, context));
+                        };
+                        const tool = (name,args) => execute(name,args,ctx);
                         if (['limpar','hdel'].includes(cmd.name)) {
                             if (message.isGroup && !isOwner) return message.react?.('\ud83d\udd12');
                             store.clearHistory(message.chatId);
@@ -261,7 +283,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 const targetJid = wantsDm ? message.senderId : undefined;
                                 const sendPayload = wantsDm ? {targetJid} : {};
                                 if (message.hasMedia) {
-                                    const media = await message.getMedia();
+                                    const media = await hold(() => message.getMedia(signal));
                                     if (!media?.buffer) throw new Error('Não foi possível obter a mídia solicitada.');
                                     if (media.type === 'image') {
                                         sendPayload.image = media.buffer;
@@ -297,19 +319,32 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 else result = await tool('search_game',{game_name:cmd.args});
                                 break;
                             }
+                            case 'sticker_som': {
+                                if (!config.soundStickersEnabled) {
+                                    await message.react?.('🔒');
+                                    break;
+                                }
+                                if (stickerService) {
+                                    const media = await ctx.getMedia();
+                                    await ctx.send(await hold(() => stickerService.toSoundSticker(media,signal,cmd.args)));
+                                } else {
+                                    result = await tool('create_sound_sticker',cmd.args ? {name:cmd.args} : {});
+                                }
+                                break;
+                            }
                             case 'sticker': case 'figurinha': {
                                 await markReact('create_sticker');
-                                const media = await message.getMedia();
+                                const media = await ctx.getMedia();
                                 const service = stickerService || require('../services/stickerService');
-                                const sticker = await service.toSticker(media,signal,cmd.args);
+                                const sticker = await hold(() => service.toSticker(media,signal,cmd.args));
                                 await ctx.send({sticker});
                                 break;
                             }
                             case 'sticker2image': case 'toimg': {
                                 await markReact('sticker_to_image');
-                                const media = await message.getMedia();
+                                const media = await hold(() => message.getMedia(signal));
                                 const service = stickerService || require('../services/stickerService');
-                                const image = await service.stickerToImage(media,signal);
+                                const image = await hold(() => service.stickerToImage(media,signal));
                                 if (image.subarray(0,3).toString() === 'GIF') {
                                     await ctx.send({document:image,mimetype:'image/gif',fileName:'figurinha.gif'});
                                 } else await ctx.send({image,mimetype:'image/png'});
@@ -329,17 +364,17 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 result = await tool('convert_currency',{amount:Number(match[1].replace(',','.')),from:match[2].toUpperCase(),to:match[3].toUpperCase()}); break;
                             }
                             default: {
-                                const media = message.hasMedia ? await message.getMedia() : null;
+                                const media = message.hasMedia ? await ctx.getMedia() : null;
                                 if (media) await markReact();
                                 let prompt = ['audio','ia_chat'].includes(cmd.name) ? cmd.args : (isDotVoice ? rawText.trim().replace(/^\.\s*/, '') : message.text || '');
                                 ctx.currentRequest = prompt;
                                 if (message.quotedText) prompt += `\n[Citação, apenas contexto]\n${JSON.stringify({autor:message.quotedAuthor || 'autoria não identificada', texto:String(message.quotedText).slice(0,4000)})}`;
                                 if (cmd.name === 'transcrever') {
                                     if (media?.type !== 'audio') throw new Error('Anexe ou cite um áudio.');
-                                    result = await transcribe(media,signal); break;
+                                    result = await hold(() => transcribe(media,signal)); break;
                                 }
                                 if (cmd.name && !['audio','ia_chat'].includes(cmd.name)) throw new Error(`Comando desconhecido. Use ${config.prefix || '>'}ajuda.`);
-                                if (media?.type === 'audio') prompt += `\n[Transcrição do áudio recebido]\n${await transcribe(media,signal)}`;
+                                if (media?.type === 'audio') prompt += `\n[Transcrição do áudio recebido]\n${await hold(() => transcribe(media,signal))}`;
                                 else if (media?.type === 'sticker') {
                                     const sharp = require('sharp');
                                     const buffer = await sharp(media.buffer,{page:0,pages:1,limitInputPixels:40000000}).png().toBuffer();
@@ -350,13 +385,13 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     if (/\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Imagem anexada ou citada disponível para create_sticker.]';
                                     else prompt += `\n[Descrição da imagem recebida]\n${await describe(media,signal)}`;
                                 }
-                                else if (media?.type === 'video' && /\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Vídeo ou GIF anexado ou citado disponível para create_sticker.]';
+                                else if (media?.type === 'video' && /\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Vídeo ou GIF disponível para create_sticker. Se a pessoa pedir som, use create_sound_sticker quando disponível.]';
                                 else if (media) throw new Error('Para conversar, envie texto, imagem ou áudio.');
                                 if (!prompt.trim()) throw new Error('Envie uma pergunta ou um anexo.');
                                 signal.throwIfAborted();
                                 const currentPrompt = message.isGroup ? `[Pedido atual de ${JSON.stringify(message.senderName || 'Participante')}]\n${prompt}` : prompt;
                                 logger.ai(`Disparando agente para "${message.senderName}" no chat ${message.chatId} | Prompt: "${prompt}"`);
-                                result = await agent(currentPrompt,ctx,executeTool);
+                                result = await agent(currentPrompt,ctx,execute);
                                 if (isDotVoice || cmd.name === 'audio') {
                                     if (typeof result === 'string' && result.trim() && !ctx.mediaSent) {
                                         try {
@@ -382,11 +417,21 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                     } finally {
                         if (reacted && message.react) await message.react('').catch(() => {});
                     }
-                });
+                }, message.persist);
             } catch (error) {
-                if(error.code==='QUEUE_CANCELLED')return;
-                logger.error('Pedido falhou: '+error.message, error);
-                if(message.react) await message.react('\u274c').catch(err=>logger.warn('Falha ao reagir: '+err.message));
+                if (error.code === 'QUEUE_CANCELLED') return;
+                if ((error.code === 'QUEUE_FULL' || error.code === 'QUEUE_PAUSED') && message.recovered) throw error;
+                if (error.code === 'QUEUE_FULL' || error.code === 'SEND_QUEUE_FULL') {
+                    return signalBackpressure(message);
+                }
+                logger.error('Pedido falhou: ' + error.message, error);
+                if (error.silent) return;
+                if (mediaAttempted && error.code !== 'QUEUE_PAUSED') {
+                    const detail = error.publicMessage || (error.code?.startsWith('QUEUE_') ? error.message : 'Não consegui entregar a mídia. Tente novamente.');
+                    try { await sendText(detail); return; }
+                    catch (sendError) { if (sendError.silent) return; }
+                }
+                if (message.react) await message.react('\u274c').catch(err => logger.warn('Falha ao reagir: ' + err.message));
 
             }
         }

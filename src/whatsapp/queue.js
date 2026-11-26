@@ -9,10 +9,15 @@ class Queue {
     }
     get active() { return this.running.values().next().value||null; }
     get activeCount() { return this.running.size; }
-    enqueue(chatId,work) {
+    canAccept(chatId) {
+        return !this.paused && this.items.length < this.limit &&
+            this.items.filter(item=>item.chatId===chatId).length < this.perChatLimit;
+    }
+    enqueue(chatId,work,onAdmit) {
         if(this.paused)return Promise.reject(queueError('QUEUE_PAUSED','A Hikari está pausada.'));
-        if(this.items.length>=this.limit||this.items.filter(item=>item.chatId===chatId).length>=this.perChatLimit)return Promise.reject(queueError('QUEUE_FULL','Já há pedidos aguardando atendimento nesta conversa.'));
+        if(!this.canAccept(chatId))return Promise.reject(queueError('QUEUE_FULL','Já há pedidos aguardando atendimento nesta conversa.'));
         return new Promise((resolve,reject)=>{
+            onAdmit?.();
             const item={chatId,work,resolve,reject,enqueuedAt:Date.now()};
             item.waitTimer=setTimeout(()=>{
                 const index=this.items.indexOf(item);
@@ -47,6 +52,18 @@ class Queue {
         }
     }
     async run(id,item,controller) {
+        const inFlight = new Set();
+        const hold = operation => {
+            controller.signal.throwIfAborted();
+            const pending = Promise.resolve().then(() => {
+                controller.signal.throwIfAborted();
+                return operation();
+            });
+            inFlight.add(pending);
+            const finished = () => inFlight.delete(pending);
+            pending.then(finished, finished);
+            return pending;
+        };
         let onAbort;
         const cancelled=new Promise((_,reject)=>{
             onAbort=()=>reject(controller.signal.reason||queueError('QUEUE_CANCELLED','Operação cancelada.','AbortError'));
@@ -54,10 +71,16 @@ class Queue {
         });
         const timer=setTimeout(()=>controller.abort(queueError('QUEUE_TIMEOUT','O processamento excedeu o tempo disponível. Tente um pedido mais curto.','TimeoutError')),this.taskTimeoutMs);
         let work;
-        try {controller.signal.throwIfAborted();work=Promise.resolve(item.work(controller.signal));}
+        try {controller.signal.throwIfAborted();work=Promise.resolve(item.work(controller.signal,hold));}
         catch(error){work=Promise.reject(error);}
         try {const result=await Promise.race([work,cancelled]);controller.signal.throwIfAborted();item.resolve(result);}catch(error){item.reject(error);}
-        finally {clearTimeout(timer);controller.signal.removeEventListener('abort',onAbort);this.running.delete(id);this.drain();}
+        finally {
+            clearTimeout(timer);
+            controller.signal.removeEventListener('abort', onAbort);
+            if (inFlight.size) await Promise.allSettled(inFlight);
+            this.running.delete(id);
+            this.drain();
+        }
     }
     pause() { this.paused=true;this.cancel(); }
     resume() { this.paused=false;this.drain(); }
