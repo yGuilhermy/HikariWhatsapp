@@ -18,7 +18,10 @@ if (require.main === module) {
     const report = validateConfiguration(config);
     config.capabilities = report.capabilities;
     for (const warning of report.warnings) logger.warn(warning);
-    if (report.errors.length) {
+    if (process.env.WHATSAPP_SUPERVISED_ONLY === 'true' && !process.env.INVOCATION_ID && process.env.HIKARI_TMUX_SUPERVISOR !== '1') {
+        logger.event('error','managed-service');
+        process.exitCode = 1;
+    } else if (report.errors.length) {
         for (const error of report.errors) logger.error(error);
         logger.event('error', 'fatal', 'Corrija as variáveis indicadas no .env antes de conectar. Nenhuma tentativa de login foi feita.');
         process.exitCode = 1;

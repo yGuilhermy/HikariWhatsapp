@@ -58,6 +58,9 @@ config.isOwner=id=>config.ownerJids.includes(id)||(/^\d{8,15}@s\.whatsapp\.net$/
 config.getGeminiKey=()=>config.geminiApiKeys[Math.floor(Math.random()*config.geminiApiKeys.length)]||'';
 config.getGeminiModels=()=>config.geminiModels.length?[...config.geminiModels]:[...new Set([config.geminiModel,config.geminiModelFallback,config.geminiModelFallback2,config.geminiModelFallback3,'gemini-3.6-flash','gemini-3.5-flash'].filter(Boolean))];
 config.ffmpegPath=process.env.FFMPEG_PATH||'ffmpeg';
+const ffprobeName = process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe';
+config.ffprobePath = process.env.FFPROBE_PATH ||
+    (/[/\\]/.test(config.ffmpegPath) ? path.join(path.dirname(config.ffmpegPath), ffprobeName) : ffprobeName);
 config.currencyProvider=(process.env.CURRENCY_PROVIDER||'awesomeapi').trim().toLowerCase();
 config.awesomeApiKey=(process.env.AWESOMEAPI_KEY||'').trim();
 config.ytdlpPath=process.env.YTDLP_PATH||'yt-dlp';

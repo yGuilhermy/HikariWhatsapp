@@ -20,7 +20,7 @@ Comece a pergunta com um ponto para receber a resposta em nota de voz.
 | Comando e aliases | O que faz |
 | :--- | :--- |
 | `>sticker [descrição]`, `>figurinha` | Cria uma figurinha de 512 × 512 sem cortar a imagem. Aceita imagens, GIFs ou vídeos de até 10 segundos e descrição opcional de até 128 caracteres. |
-| `>sticker_som [nome]` | Cria uma figurinha com o som dos primeiros 5 segundos do vídeo anexado ou citado. Usa projetohikari.com como nome padrão ou o nome informado, sempre com a tag Hikari Bot. Recurso experimental ativado com `WHATSAPP_SOUND_STICKERS=true`. |
+| `>sticker_som [nome]` | Cria uma figurinha com o som dos primeiros 10 segundos do vídeo anexado ou citado. Usa projetohikari.com como nome padrão ou o nome informado, sempre com a tag Hikari Bot. Recurso experimental ativado com `WHATSAPP_SOUND_STICKERS=true`. |
 | `>sticker2image`, `>toimg` | Converte uma figurinha estática em PNG ou uma animada em GIF. |
 | `>imagem <descrição>`, `>ia_imagem` | Gera uma imagem conforme a descrição. |
 | `>musica <nome e artista>`, `>baixar_musica_deezer` | Busca uma faixa no Deezer e envia o áudio. Para extrair áudio de um link, use >baixar_audio. |

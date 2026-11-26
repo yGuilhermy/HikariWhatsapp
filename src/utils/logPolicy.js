@@ -7,6 +7,11 @@ const events = {
     pairing: 'Abra WhatsApp > Aparelhos conectados > Conectar aparelho e escaneie o QR.',
     disconnected: 'A plataforma encerrou a conexão.',
     restricted: 'Conexão interrompida. Confira a conta no aplicativo oficial.',
+    'auth-save': 'Falha ao gravar as chaves da sessão WhatsApp.',
+    'session-lock': 'A sessão do WhatsApp está indisponível. Verifique se outra instância está em execução.',
+    'managed-service': 'Nesta VPS, inicie o HikariZap pelo supervisor configurado para a instância.',
+    'initial-buffer-released': 'Fila inicial do WhatsApp liberada após o prazo de sincronização.',
+    'send-rate-limit': 'O WhatsApp limitou os envios. A fila aguardará 60 segundos.',
     incoming: 'Mensagem recebida.',
     outgoing: 'Resposta enviada à plataforma.',
     queued: 'Pedido encaminhado à fila.',
@@ -18,7 +23,7 @@ const events = {
     moderation: 'Evento de moderação registrado.'
 };
 
-const essential = new Set(['starting', 'online', 'fatal', 'pairing', 'restricted']);
+const essential = new Set(['starting', 'online', 'fatal', 'pairing', 'restricted', 'session-lock', 'managed-service']);
 const privateKey = /key|token|password|secret|authorization|cookie|^arl$|^avisos_url$|webhook/i;
 
 function effort(value = process.env.LOG_EFFORT) {

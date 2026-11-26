@@ -4,6 +4,8 @@ const {chatJid} = require('./jid');
 const {createToolExecutor} = require('./tools');
 const {logger} = require('../utils/logger');
 const MEDIA_DOWNLOADS = new Set(['download_audio','download_video','search_and_download_music']);
+const STICKER_COMMANDS = new Set(['sticker','figurinha','sticker_som','toimg','sticker2image']);
+const STICKER_TOOLS = new Set(['create_sticker','create_sound_sticker','sticker_to_image']);
 const MEDIA_COMMANDS = new Set(['sticker_som','baixar_audio','baixar_musica','baixar_video','musica','baixar_musica_deezer']);
 const TOOL_REACTIONS = {search_web:'🔎',check_steam:'🎮',search_game:'🧲',download_game_torrent:'📦',convert_currency:'💱',generate_image:'🎨',create_sticker:'✂️',create_sound_sticker:'✂️',sticker_to_image:'🖼️',download_video:'🎬',download_audio:'🎵',search_and_download_music:'🎵',send_voice_note:'🎙️',anime_source:'🔍'};
 const TOOL_LABELS = {
@@ -50,7 +52,7 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 • \`${p}torrent <nome ou número>\` — Busca por nome ou envia o arquivo do resultado escolhido
 • \`${p}imagem <descrição>\` — Gera imagens por inteligência artificial
 • \`${p}sticker [descrição]\` — Imagem, GIF ou vídeo em figurinha (até 10 s; descrição até 128 caracteres)
-• \`${p}sticker_som [nome]\` — Figurinha experimental com o som de um vídeo (até 5 s)
+• \`${p}sticker_som [nome]\` — Figurinha experimental com o som de um vídeo (até 10 s)
 • \`${p}toimg\` ou \`${p}sticker2image\` — Converte figurinha estática em PNG ou animada em GIF
 
 *🎙️ VOZ & TRANSCRIÇÃO*
@@ -146,9 +148,9 @@ function getTelemetryText(message, queue, isOwner, now = Date.now()) {
 • Horário: ${new Date(now).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}`;
 }
 function queueOptions() { return {concurrency:config.queueConcurrency,perChatLimit:config.maxQueuePerChat,maxWaitMs:config.queueWaitMs,taskTimeoutMs:config.queueTaskTimeout}; }
-function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()), executeTool = createToolExecutor(), agent, transcribe, describe, stickerService} = {}) {
+function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()), stickerQueue = new Queue(config.maxQueue, {...queueOptions(), concurrency:1}), executeTool = createToolExecutor(), agent, transcribe, describe, stickerService} = {}) {
     if (!store) throw new Error('Armazenamento obrigatório.');
-    if (process.env.HIKARI_START_PAUSED === 'true') queue.pause();
+    if (process.env.HIKARI_START_PAUSED === 'true') { queue.pause(); stickerQueue.pause(); }
     const ownerQueue = new Queue(config.maxQueue,{...queueOptions(),concurrency:1});
     const availabilityNotices = new Map();
     const signalBackpressure = async message => {
@@ -170,12 +172,14 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
     describe ||= (media, signal) => require('../handlers/imageVisionHandler').describeImage(media.buffer,media.mimetype,signal);
     return {
         queue,
-        cancelPending() { queue.cancel(); ownerQueue.cancel(); },
+        pause() { queue.pause(); stickerQueue.pause(); ownerQueue.cancel(); },
+        canRecover(record) { return (record.lane === 'sticker' ? stickerQueue : queue).canAccept(record.chatId); },
+        cancelPending() { queue.cancel(); stickerQueue.cancel(); ownerQueue.cancel(); },
         async handle(message) {
             if (!message || message.fromMe || !chatJid(message.chatId) || !/^\d+@(s\.whatsapp\.net|lid)$/.test(message.senderId || '') || !message.id) return;
             const senderId = message.senderId;
             const sendReply = async (payload, options = {}) => {
-                const notify = !message.isGroup && store.helpNotified && !store.helpNotified(senderId);
+                const notify = !options.queueNotice && !message.isGroup && store.helpNotified && !store.helpNotified(senderId);
                 const note = `Use ${config.prefix || '>'}ajuda para ver tudo que eu posso fazer.`;
                 let output = payload;
                 if (notify && typeof payload.text === 'string') output = {...payload,text:`${payload.text}\n\n${note}`};
@@ -205,7 +209,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             const explicitVoice = /(?:respond[ae]|resposta|mand[ae]|envi[ae]).{0,30}(?:em [aá]udio|por voz|nota de voz|[uú]m [aá]udio)/iu.test(rawText);
             const wantsAudio = Boolean(isDotVoice || cmd.name === 'audio' || explicitVoice);
             const recordText = text => message.isGroup ? `${JSON.stringify(message.senderName || 'Participante')}: ${text}` : text;
-            const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker)\b/iu.test(message.text || '');
+            const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker|adesivo)\b/iu.test(message.text || '');
             const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || /\bhikari\b/iu.test(message.text || '') || (config.botName && (message.text || '').toLocaleLowerCase().includes(config.botName.toLocaleLowerCase())));
             if (!addressed) {
                 logger.zap(`Mensagem em grupo ignorada (não direcionada à Hikari) de "${message.senderName}": "${(message.text || '').slice(0, 80)}"`);
@@ -218,17 +222,24 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                 logger.event('command', 'command', `${config.prefix || '>'}${cmd.name} acionado por "${message.senderName}" no chat ${message.chatId}`);
                 const main = queue.cancel(isOwner ? null : message.chatId);
                 const owner = ownerQueue.cancel(isOwner ? null : message.chatId);
-                const res = {aborted:main.aborted||owner.aborted,dropped:main.dropped+owner.dropped};
+                const stickers = stickerQueue.cancel(isOwner ? null : message.chatId);
+                const res = {aborted:main.aborted||owner.aborted||stickers.aborted,dropped:main.dropped+owner.dropped+stickers.dropped};
                 if (res.aborted || res.dropped) return sendText('Operação cancelada com sucesso.');
                 return sendText('Nenhuma operação em andamento para cancelar.');
             }
             if (isOwner && ['pausar','retomar','fila'].includes(cmd.name)) {
-                if (cmd.name === 'pausar') { queue.pause(); return message.react?.('\u23f8\ufe0f'); }
-                if (cmd.name === 'retomar') { queue.resume(); return message.react?.('\u25b6\ufe0f'); }
-                if (cmd.name === 'fila') return sendText(`Ativa: ${queue.activeCount ?? (queue.active ? 1 : 0)}; aguardando: ${queue.items.length}; pausada: ${queue.paused}.`);
+                if (cmd.name === 'pausar') { queue.pause(); stickerQueue.pause(); return message.react?.('\u23f8\ufe0f'); }
+                if (cmd.name === 'retomar') { queue.resume(); stickerQueue.resume(); return message.react?.('\u25b6\ufe0f'); }
+                if (cmd.name === 'fila') return sendText(`Ativa: ${queue.activeCount ?? (queue.active ? 1 : 0)}; aguardando: ${queue.items.length}; pausada: ${queue.paused}.\nFigurinhas: ${stickerQueue.activeCount} ativa(s), ${stickerQueue.items.length} aguardando.`);
             }
             if (queue.paused && !isOwner) return sendText('A Hikari está pausada para manutenção.');
-            if (['ajuda','help'].includes(cmd.name)) return sendText(getHelpText());
+            if (['ajuda','help'].includes(cmd.name)) {
+                try { return await sendReply({text:getHelpText()}, {help:true}); }
+                catch (error) {
+                    if (error.code === 'SEND_QUEUE_FULL') return signalBackpressure(message);
+                    throw error;
+                }
+            }
             if (['telemetria','diagnostico','ping','userinfo'].includes(cmd.name)) {
                 const report = getTelemetryText(message,queue,isOwner);
                 if (cmd.name === 'ping') return sendText(`*Bot*${report.split('*Bot*')[1]}\nTempo entre receber e preparar a resposta; não inclui entrega pelo WhatsApp.`);
@@ -237,12 +248,34 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             }
             if ((message.text || '').length > 8000) return sendText('Envie até 8000 caracteres por mensagem.');
             if (!message.text && !message.hasMedia) return;
-            let mediaAttempted = MEDIA_COMMANDS.has(cmd.name);
+            const stickerRequestLane = STICKER_COMMANDS.has(cmd.name) || (
+                message.mediaType === 'sticker' && ['', 'ia_chat','audio','view','ver'].includes(cmd.name)
+            ) || (['','ia_chat','audio'].includes(cmd.name) && ['image','video'].includes(message.mediaType) &&
+                /\b(figurinha|sticker|adesivo)\b/iu.test(rawText));
+            const requestQueue = stickerRequestLane ? stickerQueue : isOwner && queue.paused ? ownerQueue : queue;
+            let queuedReaction;
+            const clearQueuedReaction = async () => {
+                if (!queuedReaction) return;
+                await queuedReaction.catch(() => {});
+                await message.react('').catch(() => {});
+            };
+            const sendQueuePosition = async (position, waiting) => {
+                const entry = position();
+                if (!entry || waiting.aborted || message.recovered) return;
+                if (entry.position <= 3) {
+                    if (message.react) queuedReaction = message.react('⏳');
+                    return queuedReaction;
+                }
+                const signal = AbortSignal.any([waiting,AbortSignal.timeout(12000)]);
+                await sendReply({text:'Posição na fila de figurinhas: '+entry.position+' de '+entry.total+' aguardando.'},
+                    {queueNotice:true,signal});
+            };
+            let mediaAttempted = stickerRequestLane || MEDIA_COMMANDS.has(cmd.name);
             try {
-                return await (isOwner && queue.paused ? ownerQueue : queue).enqueue(message.chatId,async (signal, hold) => {
+                const result = await requestQueue.enqueue(message.chatId,async (signal, hold) => {
                     let reacted = '';
                     const markReact = async name => {
-                        if (message.isGroup && !message.allowProgress) return;
+                        if (queuedReaction || signal.aborted || (message.isGroup && !message.allowProgress)) return;
                         const emoji = TOOL_REACTIONS[name] || '⏳';
                         if (reacted !== emoji && message.react) {
                             reacted = emoji;
@@ -250,10 +283,10 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                         }
                     };
                     try {
-                        const ctx = {...message,store,isOwner,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
+                        const ctx = {...message,store,isOwner,stickerRequestLane,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
                             signal.throwIfAborted();
                             const isMedia = Boolean(payload.audio || payload.image || payload.video || payload.document || payload.sticker);
-                            const send = () => sendReply(payload, { ...options, signal: options.signal || signal });
+                            const send = () => sendReply(payload, { ...options, stickerDelivery: Boolean(options.stickerDelivery || payload.sticker || (stickerRequestLane && isMedia)), signal: options.signal || signal });
                             const sent = await hold(send);
                             if (payload.audio) ctx.audioSent = true;
                             if (isMedia) ctx.mediaSent = true;
@@ -264,6 +297,9 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                         signal.throwIfAborted();
                         const execute = (name, args, context) => {
                             if (MEDIA_DOWNLOADS.has(name)) mediaAttempted = true;
+                            if (STICKER_TOOLS.has(name) && !stickerRequestLane) {
+                                return {error:'Para usar a fila de figurinhas, peça uma figurinha junto da mídia anexada ou citada.'};
+                            }
                             return hold(() => executeTool(name, args, context));
                         };
                         const tool = (name,args) => execute(name,args,ctx);
@@ -376,7 +412,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     result = await hold(() => transcribe(media,signal)); break;
                                 }
                                 if (cmd.name && !['audio','ia_chat'].includes(cmd.name)) throw new Error(`Comando desconhecido. Use ${config.prefix || '>'}ajuda.`);
-                                const stickerFromImage = media?.type === 'image' && /\b(figurinha|sticker)\b/iu.test(ctx.currentRequest);
+                                const stickerFromImage = media?.type === 'image' && /\b(figurinha|sticker|adesivo)\b/iu.test(ctx.currentRequest);
                                 const visionDisabled = !config.visionEnabled && ['image','sticker'].includes(media?.type) && !stickerFromImage;
                                 if (visionDisabled) {
                                     if (!ctx.currentRequest.trim()) {
@@ -396,7 +432,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     if (stickerFromImage) prompt += '\n[Imagem anexada ou citada disponível para create_sticker.]';
                                     else prompt += `\n[Descrição da imagem recebida]\n${await describe(media,signal)}`;
                                 }
-                                else if (media?.type === 'video' && /\b(figurinha|sticker)\b/iu.test(prompt)) prompt += '\n[Vídeo ou GIF disponível para create_sticker. Se a pessoa pedir som, use create_sound_sticker quando disponível.]';
+                                else if (media?.type === 'video' && /\b(figurinha|sticker|adesivo)\b/iu.test(prompt)) prompt += '\n[Vídeo ou GIF disponível para create_sticker. Se a pessoa pedir som, use create_sound_sticker quando disponível.]';
                                 else if (media) throw new Error('Para conversar, envie texto, imagem ou áudio.');
                                 if (!prompt.trim()) throw new Error('Envie uma pergunta ou um anexo.');
                                 signal.throwIfAborted();
@@ -428,8 +464,12 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                     } finally {
                         if (reacted && message.react) await message.react('').catch(() => {});
                     }
-                }, message.persist);
+                }, () => message.persist?.(stickerRequestLane ? 'sticker' : 'normal'),
+                stickerRequestLane ? sendQueuePosition : undefined);
+                await clearQueuedReaction();
+                return result;
             } catch (error) {
+                await clearQueuedReaction();
                 if (error.code === 'QUEUE_CANCELLED') return;
                 if ((error.code === 'QUEUE_FULL' || error.code === 'QUEUE_PAUSED') && message.recovered) throw error;
                 if (error.code === 'QUEUE_FULL' || error.code === 'SEND_QUEUE_FULL') {

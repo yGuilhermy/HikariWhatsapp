@@ -85,7 +85,7 @@ A ferramenta `convert_currency` permite conversões monetárias em tempo real:
 A Hikari oferece um módulo versátil de mídia:
 
 - **Downloads da Internet (`>baixar_video` e `>baixar_audio`):** Utiliza `yt-dlp` e `ffmpeg` para capturar mídias de plataformas suportadas, respeitando o limite configurado em `WHATSAPP_MAX_MEDIA_MB`.
-- **Motor Deezer HQ 320kbps (`>musica nome e artista`):** Busca no catálogo oficial do Deezer e utiliza a biblioteca `deemix` para baixar o áudio de estúdio oficial em altíssima fidelidade. Arquivos baixados são transitórios e removidos do disco logo após a entrega.
+- **Downloads do Deezer (`>musica nome e artista`):** a Hikari busca a faixa e oferece opções quando a correspondência é incerta. A qualidade depende da faixa disponível.
 
 ---
 
@@ -113,4 +113,3 @@ A ferramenta `identify_anime` integra-se com a API pública do **Trace.moe**:
 ---
 
 [🏠 Voltar ao Menu Principal](./README.md)
-

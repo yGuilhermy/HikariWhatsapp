@@ -11,7 +11,7 @@
     "type":"function",
     "function":{
       "name":"create_sound_sticker",
-      "description":"Cria e envia uma figurinha com o áudio do vídeo anexado ou citado, usando até os primeiros 5 segundos. Use quando a pessoa pedir figurinha com som ou pedir para preservar o áudio. Não use com imagens nem invente nome. Não envie texto redundante depois.",
+      "description":"Cria e envia uma figurinha com o áudio do vídeo anexado ou citado, usando até os primeiros 10 segundos. Use quando a pessoa pedir figurinha com som ou pedir para preservar o áudio. Não use com imagens nem invente nome. Não envie texto redundante depois.",
       "parameters":{"type":"object","properties":{"name":{"type":"string","description":"Nome opcional informado explicitamente pelo usuário. Se omitido, usa projetohikari.com. O autor é sempre Hikari Bot."}},"required":[]}
     }
   },
@@ -46,7 +46,7 @@
           "query"
         ]
       },
-      "description": "Busca uma música por nome/artista no Deezer e envia a primeira correspondência como arquivo de áudio."
+      "description": "Busca por nome e artista no Deezer. Envia uma correspondência exata ou apresenta opções se houver dúvida. Só passe #1 a #5 como query quando a pessoa escolher explicitamente a faixa de uma lista."
     }
   },
   {

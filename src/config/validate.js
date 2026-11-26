@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 function findExecutable(command) {
     if(!command) return false;
     const extensions=process.platform==='win32'?['',...(process.env.PATHEXT||'.EXE;.CMD;.BAT').split(';')]:[''];
@@ -40,11 +41,24 @@ function validateConfiguration(config) {
     }
     if(config.authDir===config.dataDir)errors.push('WHATSAPP_AUTH_DIR e WHATSAPP_DATA_DIR devem ser pastas diferentes.');
     if(config.ytdlpCookiesPath&&!fs.existsSync(config.ytdlpCookiesPath))warnings.push('YTDLP_COOKIES_PATH não existe; downloads serão tentados sem cookies.');
-    const ffmpeg=findExecutable(config.ffmpegPath),ytdlp=findExecutable(config.ytdlpPath),python=findExecutable(config.pythonPath);
-    const capabilities={download:ffmpeg&&ytdlp,voice:ffmpeg&&Boolean(config.hfTtsEndpoint||config.modalTtsEndpoint),transcription:ffmpeg&&Boolean(config.geminiApiKeys.length||config.hfToken||process.env.GROQ_API_KEY||process.env.WITAI_TOKEN||process.env.OPENAI_STT_KEY||process.env.LOCAL_STT_URL),deezer:python&&Boolean(process.env.DEEZER_ARL)};
-    if(!ffmpeg)warnings.push('FFMPEG_PATH não encontrado: conversão de mídia indisponível.');
-    if(!ytdlp)warnings.push('YTDLP_PATH não encontrado: downloads de links indisponíveis.');
-    if(!python)warnings.push('PYTHON_PATH não encontrado: download Deezer indisponível.');
+    const ffmpeg = findExecutable(config.ffmpegPath);
+    const ffprobe = findExecutable(config.ffprobePath || 'ffprobe');
+    const ytdlp = findExecutable(config.ytdlpPath);
+    const python = findExecutable(config.pythonPath);
+    const deezerModules = python && Boolean(process.env.DEEZER_ARL) && spawnSync(config.pythonPath, [
+        '-c', 'import deezer; import deemix'
+    ], { timeout: 5000, stdio: 'ignore', windowsHide: true }).status === 0;
+    const capabilities = {
+        download: ffmpeg && ffprobe && ytdlp,
+        voice: ffmpeg && Boolean(config.hfTtsEndpoint || config.modalTtsEndpoint),
+        transcription: ffmpeg && Boolean(config.geminiApiKeys.length || config.hfToken || process.env.GROQ_API_KEY || process.env.WITAI_TOKEN || process.env.OPENAI_STT_KEY || process.env.LOCAL_STT_URL),
+        deezer: Boolean(deezerModules && ffprobe)
+    };
+    if (!ffmpeg) warnings.push('FFMPEG_PATH não encontrado: conversão de mídia indisponível.');
+    if (!ffprobe) warnings.push('FFprobe não encontrado: validação de mídia indisponível.');
+    if (!ytdlp) warnings.push('YTDLP_PATH não encontrado: downloads de links indisponíveis.');
+    if (!python) warnings.push('PYTHON_PATH não encontrado: download Deezer indisponível.');
+    else if (process.env.DEEZER_ARL && !deezerModules) warnings.push('Instale deezer-py e deemix no interpretador configurado em PYTHON_PATH.');
     if(!capabilities.voice)warnings.push('Voz indisponível: configure um endpoint TTS e FFmpeg.');
     if(!capabilities.transcription)warnings.push('Transcrição indisponível: configure um provedor STT e FFmpeg.');
     if(!capabilities.deezer)warnings.push('Download Deezer indisponível: configure DEEZER_ARL e Python.');

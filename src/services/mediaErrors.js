@@ -3,6 +3,9 @@ function mediaError(code, publicMessage) {
 }
 
 function classifyProviderError(stderr, code) {
+    if (/exceeded (?:the )?rate.limit for accessing posts anonymously/i.test(stderr)) {
+        return mediaError('MEDIA_ANONYMOUS_LIMIT', 'A plataforma limitou o acesso anônimo. Tente novamente mais tarde.');
+    }
     if (/\b(?:429|too many requests|rate.?limit)\b/i.test(stderr)) {
         return mediaError('MEDIA_RATE_LIMIT', 'A plataforma limitou os downloads. Tente novamente mais tarde.');
     }

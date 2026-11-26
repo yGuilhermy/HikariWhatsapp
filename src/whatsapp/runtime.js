@@ -33,29 +33,34 @@ function acquireSessionLock(directory) {
 }
 
 function createSendLimiter({
-    send,isActive,onRestricted,onLimit,windowMs=60000,minGapMs=2000,
+    send,isActive,onRestricted,onLimit,onRateLimit,windowMs=60000,minGapMs=2000,
     globalLimit=20,chatLimit=6,now=Date.now,sleep=delay
 }) {
-    let transport = Promise.resolve();
-    let pending = 0;
+    const normalLane = {transport:Promise.resolve(),pending:0,limit:20};
+    const helpLane = {transport:Promise.resolve(),pending:0,limit:3};
+    const stickerLane = {transport:Promise.resolve(),pending:0,limit:2};
+    const noticeLane = {transport:Promise.resolve(),pending:0,limit:4};
     let lastAttempt = -Infinity;
+    let cooldownUntil = 0;
     let recent = [];
     const byChat = new Map();
     const unavailable = () => Object.assign(new Error('Conexão interrompida antes do envio.'),{silent:true});
 
-    return async (socket,jid,payload,options = {},signal) => {
+    return async (socket,jid,payload,options = {},signal,kind = 'normal') => {
+        const lane = kind === 'sticker' ? stickerLane : kind === 'notice' ? noticeLane :
+            kind === 'help' || kind === true ? helpLane : normalLane;
         signal?.throwIfAborted();
-        if (pending >= 20) {
+        if (lane.pending >= lane.limit) {
             throw Object.assign(new Error('Fila de envios cheia.'),{code:'SEND_QUEUE_FULL'});
         }
-        pending++;
+        lane.pending++;
         try {
             for (;;) {
                 signal?.throwIfAborted();
                 if (!isActive(socket)) throw unavailable();
-                const busy = transport;
+                const busy = lane.transport;
                 await busy;
-                if (busy !== transport) continue;
+                if (busy !== lane.transport) continue;
                 signal?.throwIfAborted();
                 if (!isActive(socket)) throw unavailable();
                 const at = now();
@@ -65,9 +70,16 @@ function createSendLimiter({
                     if (live.length) byChat.set(chat,live); else byChat.delete(chat);
                 }
                 const times = byChat.get(jid) || [];
-                const wait = Math.max(0,lastAttempt+minGapMs-at,
-                    recent.length>=globalLimit ? recent[0]+windowMs-at : 0,
-                    times.length>=chatLimit ? times[0]+windowMs-at : 0);
+                if (lane === noticeLane && (recent.length >= globalLimit - 2 || times.length >= chatLimit - 2)) {
+                    throw Object.assign(new Error('Janela de avisos ocupada.'),{silent:true});
+                }
+                // Leave capacity for chat replies even when the sticker queue is saturated.
+                const stickerSend = lane === stickerLane;
+                const globalBudget = stickerSend ? Math.max(1,globalLimit-2) : globalLimit;
+                const chatBudget = stickerSend ? Math.max(1,chatLimit-1) : chatLimit;
+                const wait = Math.max(0,cooldownUntil-at,lastAttempt+minGapMs-at,
+                    recent.length>=globalBudget ? recent[recent.length-globalBudget]+windowMs-at : 0,
+                    times.length>=chatBudget ? times[times.length-chatBudget]+windowMs-at : 0);
                 if (wait) {
                     onLimit?.();
                     try { await sleep(wait,undefined,{signal}); }
@@ -81,17 +93,21 @@ function createSendLimiter({
                     try { return await send(socket,jid,payload,options); }
                     catch (error) {
                         const code = Number(error?.output?.statusCode || error?.statusCode || error?.response?.status);
-                        if ([401,403,429].includes(code)) {
+                        if (code === 429) {
+                            cooldownUntil = Math.max(cooldownUntil,now()+windowMs);
+                            onRateLimit?.();
+                            error.silent = true;
+                        } else if ([401,403].includes(code)) {
                             onRestricted(code);
                             error.silent = true;
                         }
                         throw error;
                     }
                 });
-                transport = sending.catch(() => {});
+                lane.transport = sending.catch(() => {});
                 return await sending;
             }
-        } finally { pending--; }
+        } finally { lane.pending--; }
     };
 }
 module.exports = {acquireSessionLock,createSendLimiter};

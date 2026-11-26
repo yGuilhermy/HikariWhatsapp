@@ -127,7 +127,15 @@ function extractPseudoToolCalls(content, availableTools) {
 
 async function completion(messages, signal, toolOption = true) {
     const prefix = config.prefix || '>';
+    const extras = [];
+    if (config.soundStickersEnabled) extras.push('criar figurinhas com até 10 segundos do áudio de um vídeo');
+    if (config.visionEnabled) extras.push('descrever imagens e ler texto visual');
+    if (config.capabilities?.voice) extras.push('responder em nota de voz');
+    if (config.capabilities?.transcription) extras.push('transcrever notas de voz');
+    if (config.capabilities?.download) extras.push('baixar áudio e vídeo por link');
+    if (config.capabilities?.deezer) extras.push('buscar músicas no Deezer');
     const commandGuide = `Guia público de uso da Hikari. Use estas informações para explicar suas próprias funções de forma breve e natural, citando apenas os comandos relevantes.
+Se alguém perguntar o que você é capaz de fazer, responda em primeira pessoa, em português informal e natural, com alguns exemplos do que a pessoa pode pedir. Você pode conversar, pesquisar na web, consultar jogos na Steam, converter moedas, criar e reverter figurinhas, gerar imagens e tentar identificar a origem de anime por uma imagem. Outras funções habilitadas nesta instância: ${extras.join('; ') || 'nenhuma adicional confirmada'}. Escolha exemplos úteis em vez de recitar o menu. Se a pessoa quiser a lista completa, indique ${prefix}ajuda. Uma pergunta sobre suas capacidades não é um pedido de execução.
 Quando o usuário perguntar COMO usar uma função (por exemplo, "como que baixa jogo torrent?"), explique o procedimento; não inicie buscas, downloads ou outras ações só porque a pergunta menciona uma ferramenta. Execute quando ele pedir a ação, como "busca o torrent de Elden Ring".
 Torrent: ${prefix}torrent <nome do jogo> (ou ${prefix}buscar_jogo <nome>) inicia uma busca e mostra até 5 resultados. Outro nome inicia outra pesquisa. Depois use ${prefix}torrent <número> ou responda diretamente à lista só com o número. Ao responder a uma lista específica, vale aquela pesquisa; sem resposta direta, vale a última pesquisa da pessoa naquela conversa, por até 10 minutos. Sem pesquisa válida, peça uma nova busca. Também pode pedir a busca em linguagem natural e depois escolher o número. O bot envia apenas o .torrent; se indisponível, envia o magnet em .txt, não baixa nem instala o jogo. O usuário abre esse arquivo em um cliente torrent.
 Figurinhas: ${prefix}sticker [descrição] ou ${prefix}figurinha [descrição], anexando ou citando imagem, GIF ou vídeo. A imagem inteira mantém a proporção e usa margens transparentes em 512x512; animações usam até 10 segundos. A descrição opcional vai nos metadados, não é texto desenhado na imagem, e é cortada em 128 caracteres. Pode pedir "faz essa figurinha aqui" com a mídia anexada ou citada. ${prefix}sticker2image ou ${prefix}toimg, respondendo a uma figurinha, retorna PNG se estática ou arquivo GIF se animada.
@@ -194,7 +202,8 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
     }
     const activeTools = tools.filter(({function: {name}}) =>
         (name !== 'send_voice_note' || ctx.wantsAudio) &&
-        (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.mediaType === 'video')));
+        (name !== 'create_sticker' || (ctx.stickerRequestLane !== false && ['image','video'].includes(ctx.mediaType))) &&
+        (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.stickerRequestLane !== false && ctx.mediaType === 'video')));
     const allowed = new Map(activeTools.map(t => [t.function.name, t.function.parameters]));
     const messages = [
         {role:'system',content:config.systemPrompt + '\n' + guidance + '\nData atual: ' +

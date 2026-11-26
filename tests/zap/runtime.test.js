@@ -148,7 +148,7 @@ test('URLs de rede local e comandos de shell não chegam a downloads', async()=>
     await assert.rejects(safeGet('http://127.0.0.1/'),/não permitido/);
     assert.equal(supportedUrl('https://youtube.com.evil.org/a'),false);
     assert.equal(supportedUrl('--exec rm'),false);
-    assert.equal(supportedUrl('https://youtu.be/abc'),true);
+    assert.equal(supportedUrl('https://youtu.be/abcdefghijk'),true);
     assert.throws(()=>validate('convert_currency',{amount:NaN,from:'USD',to:'BRL'}));
     assert.throws(()=>validate('generate_image',{prompt:'gato',width:9999}));
 });
@@ -170,8 +170,8 @@ test('imagem, voz, vídeo, áudio e anime produzem payloads WhatsApp e limpam te
     const ctx={store:f.store,senderId:sender,chatId:sender,send:async payload=>f.sent.push(payload),getMedia:async()=>({type:'image',mimetype:'image/jpeg',buffer:Buffer.from('frame')})};
     await execute('generate_image',{prompt:'gato'},ctx);assert.ok(Buffer.isBuffer(f.sent.at(-1).image));assert.equal(fs.existsSync(imageFile),false);
     await execute('send_voice_note',{text:'bom dia'},ctx);assert.equal(f.sent.at(-1).ptt,true);assert.equal(f.sent.at(-1).mimetype,'audio/ogg; codecs=opus');
-    await execute('download_audio',{url:'https://youtu.be/abc'},ctx);assert.ok(Buffer.isBuffer(f.sent.at(-1).audio));assert.equal(f.sent.at(-1).ptt,false);
-    await execute('download_video',{url:'https://youtu.be/abc'},ctx);assert.ok(Buffer.isBuffer(f.sent.at(-1).video));assert.equal(cleanupCount,2);
+    await execute('download_audio',{url:'https://youtu.be/abc'},ctx);assert.deepEqual(f.sent.at(-1).audio,{url:mediaFile});assert.equal(f.sent.at(-1).ptt,false);
+    await execute('download_video',{url:'https://youtu.be/abc'},ctx);assert.deepEqual(f.sent.at(-1).video,{url:mediaFile});assert.equal(cleanupCount,2);
     assert.equal((await execute('anime_source',{},ctx))[0].title,'Teste');
 });
 
@@ -180,7 +180,7 @@ test('falha no envio ainda limpa download temporário',async t=>{
     const file=path.join(f.dir,'media.mp3');fs.writeFileSync(file,'media');let cleaned=false;
     const execute=createToolExecutor({download:async()=>({filePath:file,cleanup:()=>{cleaned=true;}})});
     const ctx={store:f.store,senderId:sender,chatId:sender,send:async()=>{throw new Error('rede caiu');}};
-    await assert.rejects(execute('download_audio',{url:'https://youtu.be/abc'},ctx),/rede caiu/);assert.equal(cleaned,true);
+    await assert.rejects(execute('download_audio',{url:'https://youtu.be/abc'},ctx),{code:'MEDIA_UPLOAD_FAILED'});assert.equal(cleaned,true);
 });
 
 
@@ -341,5 +341,3 @@ test('comando view reenvia midia citada e suporta flag oculta dm em grupos com e
     assert.equal(f.sent.length, 1);
     assert.deepEqual(f.sent[0].sticker, fakeBuffer);
 });
-
-

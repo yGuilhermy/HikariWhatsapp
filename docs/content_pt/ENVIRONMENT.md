@@ -127,7 +127,7 @@ Este documento descreve todas as variáveis suportadas pelo arquivo `.env` da Hi
 | `YTDLP_PATH` | `yt-dlp` | Caminho do executável do yt-dlp no sistema. |
 | `PYTHON_PATH` | *(Auto)* | Caminho do executável Python (se vazio, usa a `.venv` local). |
 | `YTDLP_COOKIES_PATH`| *(Opcional)* | Caminho para um arquivo `cookies.txt` exportado para evitar restrições em downloads. |
-| `DEEZER_ARL` | *(Vazio)* | Cookie `arl` extraído da sua conta Deezer para downloads de estúdio em 320kbps. |
+| `DEEZER_ARL` | *(Vazio)* | Cookie `arl` extraído da sua conta Deezer para baixar faixas do catálogo. |
 
 ---
 
@@ -145,10 +145,6 @@ Ao definir `GEMINI_API_KEY` com valores separados por vírgula, o pool alterna e
 ## Prazos e limites do agente
 
 `LLM_ATTEMPT_TIMEOUT_MS` deve caber em `LLM_COMPLETION_BUDGET_MS`, que deve caber em `LLM_AGENT_BUDGET_MS`. O orçamento do agente deve caber em `QUEUE_TASK_TIMEOUT_MS`. Rode `npm run config:check` antes de iniciar e consulte a [referência de variáveis](https://projetohikari.com/docs/referencia/variaveis-ambiente/) para os valores padrão.
-
-## Figurinhas com som
-
-Use WHATSAPP_SOUND_STICKERS=true para disponibilizar >sticker_som [nome] e o MCP create_sound_sticker.
 
 ## Fila, recuperação e grupos movimentados
 

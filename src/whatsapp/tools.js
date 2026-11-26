@@ -3,6 +3,7 @@ const path = require('node:path');
 const config = require('../config');
 const schemas = require('../data/mcp_tools.json');
 const {logger} = require('../utils/logger');
+const {mediaError} = require('../services/mediaErrors');
 
 function validate(name, args) {
     const schema = schemas.find(x => x.function.name === name)?.function.parameters;
@@ -17,6 +18,31 @@ function validate(name, args) {
         if (rule.type === 'boolean' && typeof value !== 'boolean') throw new Error(`Valor inválido: ${key}.`);
         if (rule.minimum !== undefined && value < rule.minimum || rule.maximum !== undefined && value > rule.maximum) throw new Error(`Valor fora do limite: ${key}.`);
     }
+}
+
+function musicText(value, max = 130) {
+    return String(value || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, max);
+}
+
+function normalizedTrack(value) {
+    return musicText(value, 4000).toLocaleLowerCase('pt-BR').normalize('NFD')
+        .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+async function sendMedia(ctx, file, payload) {
+    ctx.signal?.throwIfAborted();
+    const size = fs.statSync(file).size;
+    if (!size) throw mediaError('MEDIA_FORMAT', 'O arquivo retornado está vazio.');
+    if (size > config.maxMediaBytes) throw mediaError('MEDIA_TOO_LARGE', 'O arquivo excede o limite de envio. Tente uma mídia menor.');
+    try { await ctx.send(payload); }
+    catch (error) {
+        if (ctx.signal?.aborted) throw ctx.signal.reason;
+        if (error.silent) throw error;
+        logger.warn('Falha ao enviar mídia já preparada: ' + error.message);
+        throw mediaError('MEDIA_UPLOAD_FAILED', 'Preparei o arquivo, mas não consegui enviá-lo. Tente novamente.');
+    }
+    ctx.mediaSent = true;
+    if (payload.audio) ctx.audioSent = true;
 }
 
 function createToolExecutor(overrides = {}) {
@@ -35,6 +61,7 @@ function createToolExecutor(overrides = {}) {
         ...overrides
     };
     const torrentSelections = new Map();
+    const musicSelections = new Map();
     let selectionSequence = 0;
     return async function execute(name, args, ctx) {
         ctx.signal?.throwIfAborted();
@@ -89,7 +116,11 @@ function createToolExecutor(overrides = {}) {
             return {ok:true,message:'Arquivo enviado.'};
         }
         const capability={download_audio:'download',download_video:'download',send_voice_note:'voice',search_and_download_music:'deezer'}[name];
-        if(capability&&config.capabilities?.[capability]===false)throw new Error('Esta função não está configurada. Confira os avisos de inicialização no terminal ou nos logs.');
+        if (capability && config.capabilities?.[capability] === false) {
+            const message = 'Esta função não está configurada nesta instalação.';
+            if (capability === 'download' || capability === 'deezer') throw mediaError('MEDIA_UNAVAILABLE', message);
+            throw new Error(message);
+        }
         if (name === 'search_web') return service.search(args.query,ctx.signal);
         if (name === 'check_steam') return service.steam(args.game,ctx.signal);
         if (name === 'convert_currency') return service.currency(args.amount,args.from,args.to || 'BRL',ctx.signal);
@@ -117,35 +148,73 @@ function createToolExecutor(overrides = {}) {
         }
         if (['download_audio','download_video'].includes(name)) {
             const type = name === 'download_audio' ? 'audio' : 'video';
-            const result = await service.download(args.url,type,ctx.signal);
+            const result = await service.download(args.url, type, ctx.signal);
             try {
-                ctx.signal?.throwIfAborted();
-                if (fs.statSync(result.filePath).size > config.maxMediaBytes) throw new Error('Arquivo acima do limite.');
+                const media = { url: result.filePath };
                 if (type === 'audio') {
-                    await ctx.send({audio:fs.readFileSync(result.filePath),mimetype:'audio/mpeg',ptt:false});
-                    ctx.audioSent = true;
+                    await sendMedia(ctx, result.filePath, { audio: media, mimetype: 'audio/mpeg', ptt: false });
                 } else {
-                    const rawTitle = (result.fileName || path.basename(result.filePath)).replace(/\.mp4$/i,'').replace(/_/g,' ').trim();
-                    const caption = (ctx.mediaCaption && !/\b(baixando|rapidinho|aguard|esper)\b/i.test(ctx.mediaCaption)) ? ctx.mediaCaption : (rawTitle && rawTitle !== 'media' ? rawTitle : '');
-                    await ctx.send({video:fs.readFileSync(result.filePath),mimetype:'video/mp4',...(caption ? {caption} : {})});
+                    const title = musicText(path.parse(result.fileName || result.filePath).name.replace(/_/g, ' '), 160);
+                    await sendMedia(ctx, result.filePath, { video: media, mimetype: 'video/mp4', ...(title ? { caption: title } : {}) });
                 }
-                ctx.mediaSent = true;
             } finally { result.cleanup(); }
-            return {ok:true,message:'Arquivo enviado.'};
+            return { ok: true, message: 'Arquivo enviado.' };
         }
         if (name === 'search_and_download_music') {
             const deezer = require('../services/deezerMusicService');
-            const tracks = await deezer.searchDeezerTracks(args.query,ctx.signal);
-            if (!tracks.length) return {error:'Música não encontrada.'};
-            const file = await deezer.downloadDeezerTrack(tracks[0].link,ctx.signal);
+            const expiry = 10 * 60 * 1000;
+            const now = Date.now();
+            for (const [key, selection] of musicSelections) {
+                if (selection.at + expiry <= now) musicSelections.delete(key);
+            }
+
+            const query = args.query.trim();
+            const choice = query.match(/^#([1-5])$/);
+            let track;
+            if (choice) {
+                const selection = musicSelections.get(selectionKey);
+                if (!selection || (ctx.quotedMessageId && selection.messageId !== ctx.quotedMessageId)) {
+                    throw mediaError('MEDIA_SELECTION_EXPIRED', 'Essa lista de músicas expirou ou não é a sua. Faça a busca novamente.');
+                }
+                track = selection.tracks[Number(choice[1]) - 1];
+                if (!track) throw mediaError('MEDIA_SELECTION_INVALID', 'Escolha um número que aparece na lista de músicas.');
+                musicSelections.delete(selectionKey);
+            } else {
+                const linked = /^https:\/\//i.test(query) && deezer.deezerTrackId?.(query);
+                if (linked) {
+                    track = { id: linked, title: 'Faixa Deezer' };
+                } else {
+                    const tracks = await deezer.searchDeezerTracks(query, ctx.signal);
+                    ctx.signal?.throwIfAborted();
+                    if (!tracks.length) return { error: 'Música não encontrada no Deezer.' };
+                    const requested = normalizedTrack(query);
+                    const exact = tracks.filter(item => [item.title, item.title + ' ' + (item.artist || ''),
+                        (item.artist || '') + ' ' + item.title].some(value => normalizedTrack(value) === requested));
+                    if (exact.length === 1) track = exact[0];
+                    else {
+                        if (musicSelections.size >= 100) musicSelections.delete(musicSelections.keys().next().value);
+                        const lines = tracks.map((item, index) => (index + 1) + '. ' + musicText(item.title) +
+                            ' — ' + musicText(item.artist || 'Artista desconhecido') +
+                            (item.album ? ' (' + musicText(item.album, 80) + ')' : ''));
+                        const prefix = config.prefix || '>';
+                        const sent = await ctx.send({ text: lines.join('\n') + '\n\nEscolha com ' + prefix + 'musica #1 a #' + tracks.length + '. Lista válida por 10 minutos.' });
+                        ctx.signal?.throwIfAborted();
+                        musicSelections.set(selectionKey, { tracks, at: Date.now(), messageId: sent?.key?.id });
+                        ctx.toolReplySent = true;
+                        return { ok: true, message: 'Lista enviada. Aguarde a escolha do usuário.' };
+                    }
+                }
+            }
+
+            const file = await deezer.downloadDeezerTrack(String(track.id), ctx.signal);
             try {
-                ctx.signal?.throwIfAborted();
-                if (fs.statSync(file).size > config.maxMediaBytes) throw new Error('Música acima do limite.');
-                await ctx.send({audio:fs.readFileSync(file),mimetype:'audio/mpeg',ptt:false});
-                ctx.audioSent = true;
-                ctx.mediaSent = true;
+                const media = { url: file };
+                if (path.extname(file).toLowerCase() === '.flac') {
+                    const title = musicText(track.title, 100).replace(/[\\/]/g, '_') || 'Faixa Deezer';
+                    await sendMedia(ctx, file, { document: media, mimetype: 'audio/flac', fileName: title + '.flac' });
+                } else await sendMedia(ctx, file, { audio: media, mimetype: 'audio/mpeg', ptt: false });
             } finally { deezer.cleanupTempAudio(file); }
-            return {ok:true,title:tracks[0].title,artist:tracks[0].artist};
+            return { ok: true, title: track.title, artist: track.artist };
         }
         if (name === 'anime_source') {
             let media;

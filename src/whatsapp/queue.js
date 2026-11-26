@@ -13,20 +13,28 @@ class Queue {
         return !this.paused && this.items.length < this.limit &&
             this.items.filter(item=>item.chatId===chatId).length < this.perChatLimit;
     }
-    enqueue(chatId,work,onAdmit) {
+    enqueue(chatId,work,onAdmit,onWait) {
         if(this.paused)return Promise.reject(queueError('QUEUE_PAUSED','A Hikari está pausada.'));
         if(!this.canAccept(chatId))return Promise.reject(queueError('QUEUE_FULL','Já há pedidos aguardando atendimento nesta conversa.'));
         return new Promise((resolve,reject)=>{
             onAdmit?.();
-            const item={chatId,work,resolve,reject,enqueuedAt:Date.now()};
+            const item={chatId,work,resolve,reject,enqueuedAt:Date.now(),waiting:new AbortController()};
             item.waitTimer=setTimeout(()=>{
                 const index=this.items.indexOf(item);
                 if(index<0)return;
                 this.items.splice(index,1);
+                item.waiting.abort();
                 reject(queueError('QUEUE_EXPIRED','Seu pedido aguardou tempo demais. Envie novamente quando a conversa estiver disponível.'));
                 this.drain();
             },this.maxWaitMs);
             this.items.push(item);this.drain();
+            if (onWait && this.items.includes(item)) {
+                const position = () => {
+                    const index = this.items.indexOf(item);
+                    return index < 0 ? null : {position:index+1,total:this.items.length};
+                };
+                void Promise.resolve().then(() => onWait(position,item.waiting.signal)).catch(() => {});
+            }
         });
     }
     cancel(chatId) {
@@ -34,7 +42,7 @@ class Queue {
         for(const job of this.running.values())if(!chatId||job.chatId===chatId){job.controller.abort(queueError('QUEUE_CANCELLED','Operação cancelada.','AbortError'));aborted=true;}
         this.items=this.items.filter(item=>{
             if(chatId&&item.chatId!==chatId)return true;
-            clearTimeout(item.waitTimer);item.reject(queueError('QUEUE_CANCELLED','Operação cancelada.','AbortError'));dropped++;return false;
+            clearTimeout(item.waitTimer);item.waiting.abort();item.reject(queueError('QUEUE_CANCELLED','Operação cancelada.','AbortError'));dropped++;return false;
         });
         return {aborted,dropped};
     }
@@ -44,7 +52,7 @@ class Queue {
             const busyChats=new Set([...this.running.values()].map(job=>job.chatId));
             const index=this.items.findIndex(item=>!busyChats.has(item.chatId));
             if(index<0)return;
-            const [item]=this.items.splice(index,1);clearTimeout(item.waitTimer);
+            const [item]=this.items.splice(index,1);clearTimeout(item.waitTimer);item.waiting.abort();
             if(Date.now()-item.enqueuedAt>=this.maxWaitMs){item.reject(queueError('QUEUE_EXPIRED','Seu pedido aguardou tempo demais. Envie novamente.'));continue;}
             const id=++this.nextId,controller=new AbortController();
             this.running.set(id,{chatId:item.chatId,controller});
