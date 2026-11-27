@@ -3,7 +3,7 @@
     "type":"function",
     "function":{
       "name":"create_sticker",
-      "description":"Cria e já envia uma figurinha da imagem, GIF ou vídeo anexado ou citado pelo usuário. Use quando pedir fazer figurinha, sticker ou transformar essa imagem em figurinha. Preserva a imagem inteira e sua proporção, com margens transparentes. Não precisa gerar outra imagem nem pedir URL. Não envie texto duplicado após o arquivo.",
+      "description":"Baixa a mídia do anexo, da citação ou do link de vídeo já identificado no pedido e envia a figurinha. Use quando a pessoa pedir para transformar foto, GIF ou vídeo em figurinha. Mantém a proporção com margens transparentes por padrão. Não chame download_video antes e não repita a confirmação depois do envio.",
       "parameters":{"type":"object","properties":{"framing":{"type":"string","enum":["contain","crop","fill"],"description":"Padrão contain preserva a mídia inteira. Use crop para corte central ou fill para esticar em 512 × 512 apenas se a pessoa pedir."},"description":{"type":"string","description":"Descrição opcional explicitamente pedida pelo usuário, usada nos metadados; cortada em 128 caracteres. Não use o pedido inteiro como descrição."}},"required":[]}
     }
   },
@@ -11,7 +11,7 @@
     "type":"function",
     "function":{
       "name":"create_sound_sticker",
-      "description":"Cria e envia uma figurinha com o áudio do vídeo anexado ou citado, usando até os primeiros 10 segundos. Use quando a pessoa pedir figurinha com som ou pedir para preservar o áudio. Não use com imagens nem invente nome. Não envie texto redundante depois.",
+      "description":"Baixa o vídeo anexado, citado ou vinculado no pedido e envia uma figurinha com o áudio dos primeiros 10 segundos. Não chame download_video antes. Use quando a pessoa pedir figurinha com som ou pedir para preservar o áudio. Não use com imagens nem invente nome. Não envie texto redundante depois.",
       "parameters":{"type":"object","properties":{"framing":{"type":"string","enum":["contain","crop","fill"],"description":"Padrão contain preserva a mídia inteira. Use crop para corte central ou fill para esticar em 512 × 512 apenas se a pessoa pedir."},"name":{"type":"string","description":"Nome opcional informado explicitamente pelo usuário. Se omitido, usa projetohikari.com. O autor é sempre Hikari Bot."}},"required":[]}
     }
   },

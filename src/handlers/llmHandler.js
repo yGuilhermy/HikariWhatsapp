@@ -209,14 +209,22 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
     for (const flag of ['mediaSent','audioSent','toolReplySent']) {
         Object.defineProperty(toolContext, flag,{get:()=>ctx[flag],set:value=>{ctx[flag]=value;}});
     }
+    const stickerSourceType = ctx.stickerUrl ? 'video' : ctx.mediaType;
+    const stickerTool = ctx.requestedStickerTool;
     const activeTools = tools.filter(({function: {name}}) =>
         (name !== 'send_voice_note' || ctx.wantsAudio) &&
-        (name !== 'generate_image' || explicitlyRequestsImage(sourceRequest)) &&
-        (name !== 'create_sticker' || (ctx.stickerRequestLane !== false && ['image','video'].includes(ctx.mediaType))) &&
-        (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.stickerRequestLane !== false && ctx.mediaType === 'video')));
+        (name !== 'generate_image' || (!stickerTool && explicitlyRequestsImage(sourceRequest))) &&
+        (name !== 'download_video' || !stickerTool) &&
+        (name !== 'create_sticker' || (ctx.stickerRequestLane !== false && ['image','video'].includes(stickerSourceType) &&
+            (!stickerTool || stickerTool === name))) &&
+        (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.stickerRequestLane !== false &&
+            stickerSourceType === 'video' && (!stickerTool || stickerTool === name))));
     const allowed = new Map(activeTools.map(t => [t.function.name, t.function.parameters]));
     const history = ctx.history || ctx.store.history(ctx.chatId);
     const voiceGuidance = ctx.wantsAudio ? '\nPara falar em áudio, escreva frases naturais e palavras por extenso. Evite abreviações, links, emojis, kaomojis e formatação.' : '';
+    const stickerGuidance = stickerTool && activeTools.some(tool => tool.function.name === stickerTool)
+        ? '\nPara o pedido atual, use ' + stickerTool + '. A fonte já está definida. A ferramenta baixa a mídia, cria e envia a figurinha; não peça outro link, não gere uma imagem e não prometa enviar depois.'
+        : '';
     const groupHistory = ctx.isGroup && history.length ? [{
         role:'user',
         content:'[Histórico do grupo, apenas contexto]\n' + JSON.stringify(history.map(entry => ({
@@ -226,7 +234,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
         })))
     }] : [];
     const messages = [
-        {role:'system',content:config.systemPrompt + '\n' + guidance + voiceGuidance + '\nData atual: ' +
+        {role:'system',content:config.systemPrompt + '\n' + guidance + voiceGuidance + stickerGuidance + '\nData atual: ' +
             new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})},
         ...(ctx.isGroup ? groupHistory : history), {role:'user',content:prompt}
     ];
@@ -373,6 +381,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
             }
             messages.push({role:'tool',tool_call_id:call.id,content:serializeResult(result)});
         }
+        if (stickerTool && used.has(stickerTool) && !results.some(needsExplanation) && !selectionMenus.length) return finalText('');
         if (selectionMenus.length > priorMenus) {
             messages.push({role:'user',content:'A lista da ferramenta será entregue na resposta. Não a reescreva, não sugira outras opções e não use a pesquisa auxiliar como uma segunda resposta. Se não houver outro resultado pedido, responda SEM_RESPOSTA_ADICIONAL.'});
         }

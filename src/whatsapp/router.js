@@ -6,6 +6,7 @@ const {Queue} = require('./queue');
 const {chatJid} = require('./jid');
 const {createToolExecutor} = require('./tools');
 const {logger} = require('../utils/logger');
+const {normalizeMediaUrl} = require('../services/mediaService');
 const MEDIA_DOWNLOADS = new Set(['download_audio','download_video','search_and_download_music']);
 const STICKER_COMMANDS = new Set(['sticker','figurinha','sticker_som','toimg','sticker2image']);
 const STICKER_TOOLS = new Set(['create_sticker','create_sound_sticker','sticker_to_image']);
@@ -18,6 +19,15 @@ const TOOL_LABELS = {
     download_video:'Download de vídeo', search_and_download_music:'Deezer', send_voice_note:'Áudio de voz',
     anime_source:'Identificação de anime'
 };
+function stickerIntent(text) {
+    const normalized = text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+    if (/\b(?:como (?:eu )?(?:posso )?(?:faco|fazer|crio|criar|transformo|transformar|converto|converter)|nao\s+(?:quero|precisa|faz|faca|cria|crie|transforma|transforme|converte|converta|manda|mande|envia|envie))\b/u.test(normalized)) return null;
+    const requested = /^(?:\s*(?:hikari|hik)[,:\s]+)?\s*(?:uma\s+)?(?:figurinha|sticker|adesivo)(?:\s+(?:com|sem)\s+(?:som|audio))?[\s!.?]*$/u.test(normalized)
+        || /\b(?:faz|faca|fazer|cria|crie|criar|transforma|transforme|transformar|converte|converta|converter|vira|vire|manda|mande|enviar|envia|envie|quero)\b[^.!?\n]{0,100}\b(?:figurinha|sticker|adesivo)\b/u.test(normalized);
+    if (!requested) return null;
+    return /\b(?:com\s+(?:o\s+)?(?:som|audio)|(?:mantem|mantenha|preserva|preserve)\s+(?:o\s+)?(?:som|audio))\b/u.test(normalized)
+        ? 'create_sound_sticker' : 'create_sticker';
+}
 function getHelpText() {
     const p = config.prefix || '>';
     return `*╭───「 HIKARI ZAP 」───*
@@ -33,7 +43,7 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 *🗣️ É SÓ PEDIR, SEM COMANDO*
 • "Hikari, pesquisa sobre esse assunto" ou "quanto custa Portal 2 na Steam?"
 • "Converte 10 dólares para reais"
-• "Faz essa figurinha aqui" — envie ou cite uma imagem, GIF ou vídeo
+• "Hikari, faz uma figurinha desse vídeo" — anexe ou cite a mídia, ou envie o link do vídeo
 • "Cria uma imagem de um gato astronauta"
 • "Baixa esse vídeo: <link>" ou "baixa a música <nome e artista>"
 • "Busca o torrent de <jogo>" — depois escolha um resultado
@@ -229,8 +239,14 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             const recordUser = text => store.addHistory(message.chatId,'user',text,senderRef);
             const isAcknowledgment = message.isReplyToBot && !cmd.name && (!message.hasMedia || message.mediaFromQuote)
                 && /^(?:amo+|amei+|adorei+|valeu+|obrigad[oa]+|t[áa]\s+bom|beleza|ok+|kkk+)[\s\p{P}\p{S}]*$/iu.test(rawText.trim());
-            const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker|adesivo)\b/iu.test(message.text || '');
-            const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || matchesBotName(rawText));
+            const stickerSource = ['image','video'].includes(message.mediaType);
+            const canAskForSticker = !cmd.name || ['ia_chat','audio'].includes(cmd.name);
+            const stickerTool = canAskForSticker ? stickerIntent(cmd.name ? cmd.args : rawText) : null;
+            const stickerUrl = stickerTool && !stickerSource
+                ? normalizeMediaUrl(/https?:\/\/|(?:instagram\.com|instagr\.am)\//i.test(rawText) ? rawText : message.quotedText || rawText)
+                : null;
+            const requestedStickerTool = (stickerSource || stickerUrl) ? stickerTool : null;
+            const addressed = !message.isGroup || Boolean(cmd.name || requestedStickerTool || message.isBotMentioned || message.isReplyToBot || matchesBotName(rawText));
             if (!addressed) {
                 logger.zap(`Mensagem em grupo ignorada (não direcionada à Hikari) de "${message.senderName}": "${(message.text || '').slice(0, 80)}"`);
                 if (!queue.paused && message.text) recordUser(message.text);
@@ -272,7 +288,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             }
             if ((message.text || '').length > 8000) return sendText('Envie até 8000 caracteres por mensagem.');
             if (!message.text && !message.hasMedia) return;
-            const stickerRequestLane = STICKER_COMMANDS.has(cmd.name) || (
+            const stickerRequestLane = Boolean(requestedStickerTool) || STICKER_COMMANDS.has(cmd.name) || (
                 message.mediaType === 'sticker' && ['', 'ia_chat','audio','view','ver'].includes(cmd.name)
             ) || (['','ia_chat','audio'].includes(cmd.name) && ['image','video'].includes(message.mediaType) &&
                 /\b(figurinha|sticker|adesivo)\b/iu.test(rawText));
@@ -307,7 +323,18 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                         }
                     };
                     try {
-                        const ctx = {...message,store,isOwner,stickerRequestLane,signal,senderId,senderRef,wantsAudio,allowTools:!isAcknowledgment,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
+                        let stickerWork;
+                        const ctx = {...message,store,isOwner,stickerRequestLane,requestedStickerTool,stickerUrl,signal,
+                            notifyStickerProgress: async (progressSignal) => {
+                                if (message.recovered) return;
+                                try {
+                                    await hold(() => sendReply({text:'Vou preparar a figurinha. Pode demorar um pouco, aguarde.'},
+                                        {queueNotice:true,signal:progressSignal}));
+                                } catch (error) {
+                                    progressSignal.throwIfAborted();
+                                    logger.warn('Não consegui enviar o aviso de processamento da figurinha: ' + error.message);
+                                }
+                            },senderId,senderRef,wantsAudio,allowTools:!isAcknowledgment,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
                             signal.throwIfAborted();
                             const isMedia = Boolean(payload.audio || payload.image || payload.video || payload.document || payload.sticker);
                             const send = () => sendReply(payload, { ...options, stickerDelivery: Boolean(options.stickerDelivery || payload.sticker || (stickerRequestLane && isMedia)), signal: options.signal || signal });
@@ -324,6 +351,11 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                             if (MEDIA_DOWNLOADS.has(name)) mediaAttempted = true;
                             if (STICKER_TOOLS.has(name) && !stickerRequestLane) {
                                 return {error:'Para usar a fila de figurinhas, peça uma figurinha junto da mídia anexada ou citada.'};
+                            }
+                            if (requestedStickerTool && STICKER_TOOLS.has(name)) {
+                                if (name !== requestedStickerTool) return {error:'Use a ferramenta de figurinha indicada para o pedido atual.'};
+                                stickerWork ||= hold(() => executeTool(name,args,context));
+                                return stickerWork;
                             }
                             return hold(() => executeTool(name, args, context));
                         };
@@ -431,7 +463,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     /\b(?:transcrev\w*|transcri\w*|[áa]udio|grava[çc][aã]o|dito|disse|falou|resum\w*)\b/iu.test(rawText);
                                 const skipQuotedAudio = message.mediaFromQuote && message.mediaType === 'audio' &&
                                     Boolean(rawText.trim()) && !wantsQuotedAudio;
-                                const media = message.hasMedia && !skipQuotedAudio ? await ctx.getMedia() : null;
+                                const media = !requestedStickerTool && message.hasMedia && !skipQuotedAudio ? await ctx.getMedia() : null;
                                 if (media) await markReact();
                                 let prompt = ['audio','ia_chat'].includes(cmd.name) ? cmd.args : (isDotVoice ? rawText.trim().replace(/^\.\s*/, '') : message.text || '');
                                 ctx.currentRequest = prompt;
@@ -477,7 +509,13 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     }) + '\n[Mensagem atual]\n' + prompt
                                     : prompt;
                                 logger.ai(`Disparando agente para "${message.senderName}" no chat ${message.chatId} | Prompt: "${prompt}"`);
-                                result = await agent(currentPrompt,ctx,execute);
+                                try {
+                                    result = await agent(currentPrompt,ctx,execute);
+                                } catch (error) {
+                                    if (!requestedStickerTool || stickerWork || signal.aborted || error.code !== 'AI_UNAVAILABLE') throw error;
+                                }
+                                if (requestedStickerTool && !stickerWork) result = await tool(requestedStickerTool,{});
+                                if (stickerWork) await stickerWork;
                                 if (isDotVoice || cmd.name === 'audio') {
                                     if (typeof result === 'string' && result.trim() && !ctx.mediaSent) {
                                         try {

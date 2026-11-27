@@ -113,7 +113,7 @@ test('descrição fica nos metadados, corta em 128 caracteres e preserva Unicode
         assert.equal((await sharp(webp).metadata()).width,512);
         assert.ok(webp.length<=100*1024);
     }
-    assert.equal(readDescription(await toSticker(media)),undefined);
+    assert.equal(readDescription(await toSticker(media)),'projetohikari.com');
 });
 
 test('rejeita mídia incorreta, corrompida e operação cancelada', async () => {
@@ -134,7 +134,7 @@ test('comandos enviam somente a mídia e não acionam a IA', async t => {
     }});
     for (const [i,text] of ['>sticker Minha descrição','>sticker2image','>figurinha Minha descrição','>toimg'].entries()) {
         await router.handle({id:String(i),chatId:'123@g.us',isGroup:true,senderId:'5511999999999@s.whatsapp.net',text,
-            hasMedia:true,getMedia:async()=>({type:i%2?'sticker':'image'}),
+            allowProgress:true,hasMedia:true,getMedia:async()=>({type:i%2?'sticker':'image'}),
             send:async payload=>sent.push(payload),react:async emoji=>reactions.push(emoji)});
     }
     assert.deepEqual(calls,['image','sticker','image','sticker']);
@@ -150,13 +150,18 @@ test('pedido natural cria figurinha da imagem citada sem visão externa nem resp
     config.localLlmEnabled=true;
     let calls=0;
     axios.post=async(url,payload)=>{
-        calls++;assert.ok(payload.tools.some(x=>x.function.name==='create_sticker'));
-        return {data:{choices:[{message:{content:null,tool_calls:[{id:'sticker1',type:'function',function:{name:'create_sticker',arguments:'{}'}}]}}]}};
+        if (++calls === 1) {
+            assert.ok(payload.tools.some(x=>x.function.name==='create_sticker'));
+            return {data:{choices:[{message:{content:null,tool_calls:[{id:'sticker1',type:'function',function:{name:'create_sticker',arguments:'{}'}}]}}]}};
+        }
+        return {data:{choices:[{message:{content:'sem_resposta_adicional'}}]}};
     };
     const media={type:'image',buffer:Buffer.from('cited-image')},sent=[];
     const execute=createToolExecutor({sticker:async received=>{assert.equal(received,media);return Buffer.from('webp');}});
     const router=createRouter({store:new Store(directory),executeTool:execute,describe:async()=>assert.fail('Não deve depender de visão para criar figurinha')});
-    await router.handle({id:'1',text:'faz essa figurinha aqui',chatId:'123@g.us',senderId:'5511999999999@s.whatsapp.net',isGroup:true,hasMedia:true,getMedia:async()=>media,send:async payload=>sent.push(payload)});
-    assert.equal(sent.length,1);assert.ok(sent[0].sticker);
-    assert.ok(calls>=1);
+    await router.handle({id:'1',text:'faz essa figurinha aqui',chatId:'123@g.us',senderId:'5511999999999@s.whatsapp.net',isGroup:true,hasMedia:true,mediaType:'image',getMedia:async()=>media,send:async payload=>sent.push(payload)});
+    assert.equal(sent.length,2);
+    assert.match(sent[0].text,/Pode demorar/);
+    assert.ok(sent[1].sticker);
+    assert.equal(calls,1);
 });

@@ -26,6 +26,10 @@ O módulo `src/services/stickerService.js` resolve o problema comum de figurinha
 4. **Codificação WebP:** O arquivo é exportado em formato WebP otimizado com compressão sem perda visível.
 5. **Injeção de Metadados EXIF:** Os blocos de metadados do WhatsApp são anexados ao WebP, identificando o pacote e a autoria.
 
+### Figurinhas sem comando
+
+Anexe um vídeo ou responda a ele com “Hikari, faz uma figurinha desse vídeo”. Também dá para pedir usando um link de vídeo do YouTube, Instagram, TikTok ou X, quando o download estiver habilitado. A Hikari avisa quando começa, baixa a mídia na fila de figurinhas e entrega a figurinha no mesmo chat. Para preservar o áudio, peça “com som” em uma instância que tenha essa opção ativada.
+
 ### Tratamento de Figurinhas Animadas (Vídeos e GIFs):
 1. **Duração.** O bot processa até os primeiros 10 segundos do vídeo ou GIF.
 2. **Processamento:** o Zap reaproveita WebP compatível e usa Sharp para GIFs dentro do orçamento de memória. O FFmpeg converte vídeos e GIFs maiores:

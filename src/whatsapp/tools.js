@@ -4,6 +4,7 @@ const config = require('../config');
 const schemas = require('../data/mcp_tools.json');
 const {logger} = require('../utils/logger');
 const {mediaError} = require('../services/mediaErrors');
+const {checkMediaSize} = require('../services/mediaService');
 
 function validate(name, args) {
     const schema = schemas.find(x => x.function.name === name)?.function.parameters;
@@ -76,22 +77,32 @@ function createToolExecutor(overrides = {}) {
         if (ctx.onToolStart) await ctx.onToolStart(name);
         ctx.signal?.throwIfAborted();
         logger.event('tool', 'tool', `Iniciando execução da ferramenta "${name}" | args: ${JSON.stringify(args)}`);
-        if (name === 'create_sound_sticker') {
-            if (!config.soundStickersEnabled) return {error:'Figurinhas com som estão desativadas nesta instância.'};
-            const media = await ctx.getMedia();
-            const sticker = await service.soundSticker(media,ctx.signal,args.name || '',args.framing);
-            ctx.signal?.throwIfAborted();
-            await ctx.send(sticker);
-            ctx.mediaSent = true;
-            return {ok:true,message:'Figurinha com som enviada.'};
-        }
-        if (name === 'create_sticker') {
-            const media = await ctx.getMedia();
-            const sticker = await service.sticker(media,ctx.signal,args.description || '',args.framing);
-            ctx.signal?.throwIfAborted();
-            await ctx.send({sticker});
-            ctx.mediaSent=true;
-            return {ok:true,message:'Figurinha enviada.'};
+        if (name === 'create_sticker' || name === 'create_sound_sticker') {
+            const withSound = name === 'create_sound_sticker';
+            if (withSound && !config.soundStickersEnabled) return {error:'Figurinhas com som estão desativadas nesta instância.'};
+            if (ctx.stickerUrl && config.capabilities?.download === false) {
+                throw mediaError('MEDIA_UNAVAILABLE','O download por link está desativado. Anexe o vídeo para criar a figurinha.');
+            }
+            if (ctx.requestedStickerTool) await ctx.notifyStickerProgress?.(ctx.signal);
+            const download = ctx.stickerUrl ? await service.download(ctx.stickerUrl,'video',ctx.signal) : null;
+            try {
+                let media;
+                if (download) {
+                    checkMediaSize(download.filePath);
+                    const buffer = await fs.promises.readFile(download.filePath,{signal:ctx.signal});
+                    media = {buffer,type:'video',mimetype:'video/mp4'};
+                } else {
+                    media = await ctx.getMedia();
+                }
+                ctx.signal?.throwIfAborted();
+                const payload = withSound
+                    ? await service.soundSticker(media,ctx.signal,args.name || '',args.framing)
+                    : {sticker:await service.sticker(media,ctx.signal,args.description || '',args.framing)};
+                ctx.signal?.throwIfAborted();
+                await ctx.send(payload);
+                ctx.mediaSent = true;
+                return {ok:true,message:withSound ? 'Figurinha com som enviada.' : 'Figurinha enviada.'};
+            } finally { download?.cleanup(); }
         }
         const selectionKey = JSON.stringify([ctx.chatId,ctx.senderId]);
         if (name === 'search_game') {
