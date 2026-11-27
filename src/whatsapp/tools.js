@@ -16,6 +16,7 @@ function validate(name, args) {
         if (rule.type === 'string' && (typeof value !== 'string' || value.length > 4000)) throw new Error(`Texto inválido: ${key}.`);
         if (['number','integer'].includes(rule.type) && (typeof value !== 'number' || !Number.isFinite(value) || (rule.type === 'integer' && !Number.isInteger(value)))) throw new Error(`Número inválido: ${key}.`);
         if (rule.type === 'boolean' && typeof value !== 'boolean') throw new Error(`Valor inválido: ${key}.`);
+        if (rule.enum && !rule.enum.includes(value)) throw new Error(`Valor inválido: ${key}.`);
         if (rule.minimum !== undefined && value < rule.minimum || rule.maximum !== undefined && value > rule.maximum) throw new Error(`Valor fora do limite: ${key}.`);
     }
 }
@@ -72,7 +73,7 @@ function createToolExecutor(overrides = {}) {
         if (name === 'create_sound_sticker') {
             if (!config.soundStickersEnabled) return {error:'Figurinhas com som estão desativadas nesta instância.'};
             const media = await ctx.getMedia();
-            const sticker = await service.soundSticker(media,ctx.signal,args.name || '');
+            const sticker = await service.soundSticker(media,ctx.signal,args.name || '',args.framing);
             ctx.signal?.throwIfAborted();
             await ctx.send(sticker);
             ctx.mediaSent = true;
@@ -80,7 +81,7 @@ function createToolExecutor(overrides = {}) {
         }
         if (name === 'create_sticker') {
             const media = await ctx.getMedia();
-            const sticker = await service.sticker(media,ctx.signal,args.description || '');
+            const sticker = await service.sticker(media,ctx.signal,args.description || '',args.framing);
             ctx.signal?.throwIfAborted();
             await ctx.send({sticker});
             ctx.mediaSent=true;

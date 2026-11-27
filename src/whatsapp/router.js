@@ -53,6 +53,8 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 • \`${p}imagem <descrição>\` — Gera imagens por inteligência artificial
 • \`${p}sticker [descrição]\` — Imagem, GIF ou vídeo em figurinha (até 10 s; descrição até 128 caracteres)
 • \`${p}sticker_som [nome]\` — Figurinha experimental com o som de um vídeo (até 10 s)
+• Sufixos _crop e _fill valem para sticker, figurinha e sticker_som. _crop corta pelo centro; _fill estica para preencher 512 × 512. Sem sufixo, preservo a imagem inteira.
+• O texto após o comando vira o nome da figurinha (até 128 caracteres). Sem nome, uso projetohikari.com. O autor é sempre Hikari Bot.
 • \`${p}toimg\` ou \`${p}sticker2image\` — Converte figurinha estática em PNG ou animada em GIF
 
 *🎙️ VOZ & TRANSCRIÇÃO*
@@ -199,6 +201,9 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             if (!message.recovered && store.seen(`${message.chatId}:${message.id}`)) return;
             if ([senderId,...(message.senderAliases || [])].some(id=>store.banned?.(id))) return;
             const cmd = command(message.text);
+            const framingCommand = /^(sticker_som|sticker|figurinha)_(crop|fill)$/.exec(cmd.name);
+            const stickerFraming = framingCommand?.[2] || 'contain';
+            if (framingCommand) cmd.name = framingCommand[1];
             const choiceText = String(message.text || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
             const choice = choiceText.match(/^(?:(?:eu\s+)?(?:quero|manda|mande|envia|envie|baixa|baixe|pega|pegue|escolho|seleciona|selecione)\s+)?(?:(?:o|a|numero|opcao|resultado|jogo)\s+)*(\d+|primeiro|primeira|segundo|segunda|terceiro|terceira|quarto|quarta|quinto|quinta)(?:\s+(?:por favor|pfv|pf|pra mim|para mim))?[.!]?$/);
             if (!cmd.name && message.quotedMessageId && message.isReplyToBot && choice) {
@@ -365,9 +370,9 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 }
                                 if (stickerService) {
                                     const media = await ctx.getMedia();
-                                    await ctx.send(await hold(() => stickerService.toSoundSticker(media,signal,cmd.args)));
+                                    await ctx.send(await hold(() => stickerService.toSoundSticker(media,signal,cmd.args,stickerFraming)));
                                 } else {
-                                    result = await tool('create_sound_sticker',cmd.args ? {name:cmd.args} : {});
+                                    result = await tool('create_sound_sticker',{framing:stickerFraming,...(cmd.args ? {name:cmd.args} : {})});
                                 }
                                 break;
                             }
@@ -375,7 +380,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 await markReact('create_sticker');
                                 const media = await ctx.getMedia();
                                 const service = stickerService || require('../services/stickerService');
-                                const sticker = await hold(() => service.toSticker(media,signal,cmd.args));
+                                const sticker = await hold(() => service.toSticker(media,signal,cmd.args,stickerFraming));
                                 await ctx.send({sticker});
                                 break;
                             }

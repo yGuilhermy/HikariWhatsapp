@@ -13,13 +13,25 @@ const STATIC_LIMIT = 100 * 1024;
 const DESCRIPTION_LIMIT = 128;
 const MAX_ANIMATION_SECONDS = 10;
 const MAX_ANIMATION_MS = MAX_ANIMATION_SECONDS * 1000;
-function withDescription(webp, text, publisher = 'Hikari') {
-    const description = Array.from(String(text || '').trim()).slice(0,DESCRIPTION_LIMIT).join('');
-    if (!description) return webp;
+const frames = {
+    contain: { fit:'contain', background:{r:0,g:0,b:0,alpha:0},
+        filter:'scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0' },
+    crop: { fit:'cover', position:'centre', filter:"crop='min(iw,ih)':'min(iw,ih)':exact=1,scale=512:512,format=rgba" },
+    fill: { fit:'fill', filter:'scale=512:512,format=rgba' }
+};
+
+function stickerFrame(framing) {
+    if (!Object.hasOwn(frames,framing)) throw new Error('Enquadramento de figurinha inválido.');
+    return frames[framing];
+}
+
+function withDescription(webp, text) {
+    const name = String(text || '').trim() || 'projetohikari.com';
+    const description = Array.from(name).slice(0,DESCRIPTION_LIMIT).join('');
     const metadata = Buffer.from(JSON.stringify({
         'sticker-pack-id':'hikari-zap',
         'sticker-pack-name':description,
-        'sticker-pack-publisher':publisher,
+        'sticker-pack-publisher':'Hikari Bot',
         emojis:[]
     }),'utf8');
     // WhatsApp sticker metadata: TIFF with the JSON payload in tag 0x5741.
@@ -40,7 +52,7 @@ function withDescription(webp, text, publisher = 'Hikari') {
         if (end>webp.length) throw new Error('Figurinha WebP inválida.');
         const data = Buffer.from(webp.subarray(offset+8,offset+8+length));
         if (name==='VP8X') { data[0] |= 0x08; extended = true; }
-        if (name==='ALPH') alpha = true;
+        if (name==='ALPH' || (name==='VP8L' && data.length >= 5 && (data[4] & 0x10))) alpha = true;
         if (name!=='EXIF') chunks.push(chunk(name,data));
         offset=end;
     }
@@ -63,24 +75,25 @@ function validate(media, types) {
     if (!Buffer.isBuffer(media.buffer) || !media.buffer.length) throw new Error('Mídia vazia.');
     if (media.buffer.length > config.maxMediaBytes) throw new Error('Anexo acima do limite de mídia.');
 }
-async function toSticker(media, signal, description = '') {
+async function toSticker(media, signal, description = '', framing = 'contain') {
     validate(media, ['image','video']);
     signal?.throwIfAborted();
-    if (media.type === 'video') return encodeAnimated(media, signal, description, false);
+    const frame = stickerFrame(framing);
+    if (media.type === 'video') return encodeAnimated(media, signal, description, false, frame);
     const isGif = media.buffer.subarray(0,3).toString() === 'GIF';
     const isWebp = media.buffer.subarray(8,12).toString() === 'WEBP';
     if (isGif || isWebp) {
         const metadata = await sharp(media.buffer,{limitInputPixels:40000000}).metadata();
         if (metadata.pages > 1) {
-            const sticker = await encodeImageAnimation(media.buffer,metadata,description,signal);
+            const sticker = await encodeImageAnimation(media.buffer,metadata,description,signal,frame);
             if (sticker) return sticker;
             if (isWebp) throw mediaError('STICKER_SIZE', 'Esse WebP animado excede o limite. Envie um trecho menor.');
-            return encodeAnimated(media, signal, description, false);
+            return encodeAnimated(media, signal, description, false, frame);
         }
     }
     for (const quality of [75,60,40,20]) {
         const encoded = await sharp(media.buffer, {limitInputPixels:40000000}).rotate()
-            .resize(SIZE,SIZE,{fit:'contain',background:{r:0,g:0,b:0,alpha:0}}).webp({quality}).toBuffer();
+            .resize(SIZE,SIZE,frame).webp({quality}).toBuffer();
         const buffer = withDescription(encoded,description);
         signal?.throwIfAborted();
         if (buffer.length <= STATIC_LIMIT) return buffer;
@@ -88,7 +101,7 @@ async function toSticker(media, signal, description = '') {
     throw new Error('A figurinha ultrapassou 100 KB; tente outra imagem.');
 }
 
-async function encodeImageAnimation(buffer, metadata, description, signal) {
+async function encodeImageAnimation(buffer, metadata, description, signal, frame) {
     const {delay,format,pages,width,pageHeight=metadata.height} = metadata;
     if (!delay?.length || !pageHeight) return null;
     if (format === 'webp' && width === SIZE && pageHeight === SIZE &&
@@ -110,22 +123,22 @@ async function encodeImageAnimation(buffer, metadata, description, signal) {
     if (frames < 2 || frames * Math.max(width*pageHeight,SIZE*SIZE) > pixelBudget) return null;
     signal?.throwIfAborted();
     const encoded = await sharp(buffer,{pages:frames,limitInputPixels:pixelBudget})
-        .resize(SIZE,SIZE,{fit:'contain',background:{r:0,g:0,b:0,alpha:0}})
+        .resize(SIZE,SIZE,frame)
         .webp({quality:48,effort:1,delay:delays.slice(0,frames),loop:0}).toBuffer();
     signal?.throwIfAborted();
     const sticker = withDescription(encoded,description);
     return sticker.length <= ANIMATED_LIMIT ? sticker : null;
 }
 
-async function toSoundSticker(media, signal, name) {
+async function toSoundSticker(media, signal, name, framing = 'contain') {
     if (media?.type !== 'video') {
         throw mediaError('STICKER_SOUND_INPUT', 'Envie ou cite um vídeo com áudio usando >sticker_som [nome].');
     }
     validate(media, ['video']);
-    return encodeAnimated(media, signal, name?.trim() || 'projetohikari.com', true);
+    return encodeAnimated(media, signal, name, true, stickerFrame(framing));
 }
 
-async function encodeAnimated(media, signal, description, withSound) {
+async function encodeAnimated(media, signal, description, withSound, frame) {
     signal?.throwIfAborted();
     const duration = String(MAX_ANIMATION_SECONDS);
     const formats = 'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm';
@@ -142,9 +155,9 @@ async function encodeAnimated(media, signal, description, withSound) {
             const convert = async encoder => {
                 await run(config.ffmpegPath || 'ffmpeg', ['-nostdin','-hide_banner','-loglevel','error','-y',
                     '-filter_threads','1',...inputOptions,'-max_pixels','16000000','-threads','1','-t',duration,'-i',input,
-                    '-vf','fps='+fps+",scale=w='iw*sar':h=ih,setsar=1,scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0",
+                    '-vf','fps='+fps+",scale=w='iw*sar':h=ih,setsar=1,"+frame.filter+',setsar=1',
                     '-c:v',encoder,'-compression_level','1','-q:v',String(quality),'-loop','0','-an',output], {signal,timeout:30000});
-                return withDescription(await fs.promises.readFile(output),description,withSound ? 'Hikari Bot' : undefined);
+                return withDescription(await fs.promises.readFile(output),description);
             };
             let sticker = await convert(useFrameEncoder ? 'libwebp' : 'libwebp_anim');
             if (sticker.length > ANIMATED_LIMIT) continue;

@@ -118,8 +118,11 @@ Veja todos os comandos, aliases e permissões na [referência de comandos](./doc
 | `>audio <pergunta>` | Pede uma resposta em nota de voz. Também dá para começar a pergunta com um ponto. |
 | `>falar <texto>` | Lê em voz alta o texto informado. |
 | `>transcrever` | Anexe um áudio ou envie o comando em resposta direta à mensagem de áudio. Precisa de um provedor de transcrição configurado. Sem áudio, o pedido falha. |
-| `>sticker [descrição]`, `>figurinha` | Cria uma figurinha de 512 × 512 sem cortar a imagem. Aceita imagens, GIFs ou vídeos de até 10 segundos e descrição opcional de até 128 caracteres. |
+| `>sticker [nome]`, `>figurinha` | Cria uma figurinha de 512 × 512 com foto, GIF ou vídeo de até 10 segundos. Preserva o quadro inteiro por padrão. |
 | `>sticker_som [nome]` | Cria uma figurinha com o som dos primeiros 10 segundos do vídeo anexado ou citado. Usa projetohikari.com como nome padrão ou o nome informado, sempre com a tag Hikari Bot. Recurso experimental ativado com `WHATSAPP_SOUND_STICKERS=true`. |
+| `>sticker_crop`, `>sticker_som_crop` | Corta a mídia pelo centro para preencher o quadrado. |
+| `>sticker_fill`, `>sticker_som_fill` | Estica a mídia para preencher o quadrado. |
+| Nome da figurinha | Até 128 caracteres após o comando. O padrão é `projetohikari.com` e o autor é sempre Hikari Bot. Os sufixos também funcionam com `>figurinha`. |
 | `>sticker2image`, `>toimg` | Converte uma figurinha estática em PNG ou uma animada em GIF. |
 | `>musica <nome e artista>`, `>baixar_musica_deezer` | Busca uma faixa no Deezer e envia o áudio. Para extrair áudio de um link, use >baixar_audio. |
 | `>baixar_video <link>` | Baixa o vídeo de um link compatível e envia em MP4. |
