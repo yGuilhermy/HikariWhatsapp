@@ -109,7 +109,8 @@ Se você prefere fazer tudo na mão (Ubuntu/Linux recomendado):
 ### 💬 Conversando com a Hikari (Comandos do WhatsApp)
 
 - **No Privado:** Basta mandar uma mensagem diretamente para mim, sem prefixo!
-- **Em Grupos:** Diga "Hikari", mencione minha conta, responda a uma mensagem minha ou utilize o prefixo `>` (ou `/`):
+- No `.env`, `WHATSAPP_BOT_ALIASES=hik` define os apelidos em grupos. Separe vários por vírgula e deixe vazio para desativá-los.
+- **Em Grupos:** Diga "Hikari" ou "hik" como palavra separada, mencione minha conta, responda a uma mensagem minha ou utilize o prefixo `>` (ou `/`):
 
 Veja todos os comandos, aliases e permissões na [referência de comandos](./docs/content_pt/COMMANDS.md).
 

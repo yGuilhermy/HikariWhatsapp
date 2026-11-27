@@ -1,4 +1,6 @@
 const config = require('../config');
+const { createBotNameMatcher } = require('../utils/botNameMatcher');
+const matchesBotName = createBotNameMatcher(config.botName || 'Hikari', process.env.WHATSAPP_BOT_ALIASES ?? 'hik', 'Hikari');
 const {Queue} = require('./queue');
 const {chatJid} = require('./jid');
 const {createToolExecutor} = require('./tools');
@@ -23,7 +25,7 @@ function getHelpText() {
 
 *💬 COMO CONVERSAR*
 • *No Privado:* Converse normalmente em linguagem comum.
-• *Em Grupos:* Mencione @Hikari, responda a uma mensagem minha ou me chame pelo nome.
+• *Em Grupos:* Mencione @Hikari, responda a uma mensagem minha ou me chame pelo nome ou por um apelido, como hik.
 
 Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos comandos abaixo.
 
@@ -216,7 +218,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             const wantsAudio = Boolean(isDotVoice || cmd.name === 'audio' || explicitVoice);
             const recordText = text => message.isGroup ? `${JSON.stringify(message.senderName || 'Participante')}: ${text}` : text;
             const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker|adesivo)\b/iu.test(message.text || '');
-            const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || /\bhikari\b/iu.test(message.text || '') || (config.botName && (message.text || '').toLocaleLowerCase().includes(config.botName.toLocaleLowerCase())));
+            const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || matchesBotName(rawText));
             if (!addressed) {
                 logger.zap(`Mensagem em grupo ignorada (não direcionada à Hikari) de "${message.senderName}": "${(message.text || '').slice(0, 80)}"`);
                 if (!queue.paused && message.text) store.addHistory(message.chatId,'user',recordText(message.text));
