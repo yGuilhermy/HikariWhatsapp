@@ -57,16 +57,16 @@ test('texto de pensamento não vira chamada de ferramenta e legenda só recebe r
     mock(t,async()=>{
         calls++;
         if(calls===1)return response('<think>default_api.search_web(query="segredo")</think>Aqui está.',{tool_calls:[{id:'img',type:'function',function:{name:'generate_image',arguments:'{"prompt":"gato"}'}}]});
-        return response('*Thinking:* default_api.search_web(query="segredo")\nFinal answer: Pronto.');
+        return response('*Thinking:* default_api.search_web(query="segredo")\nFinal answer: Imagem do gato criada.');
     });
     const executed=[];
     const ctx={history:[],chatId:'test',store:{history:()=>[]}};
-    const text=await executeAgentLoop('faça uma imagem',ctx,async(name)=>{
-        assert.equal(ctx.mediaCaption,'Aqui está.');
+    const text=await executeAgentLoop('faça uma imagem',ctx,async(name,args,toolCtx)=>{
+        assert.equal(toolCtx.mediaCaption,'Aqui está.');
         executed.push(name);return {ok:true};
     });
     assert.deepEqual(executed,['generate_image']);
-    assert.equal(text,'Pronto.');
+    assert.equal(text,'Imagem do gato criada.');
 });
 test('generateResponse também devolve apenas o texto final',async t=>{
     mock(t,async()=>response('**Thinking:** privado\n**Final answer:** Olá!'));

@@ -56,7 +56,9 @@ config.systemPrompt=process.env.SYSTEM_PROMPT||'Você é Hikari, criada por Guil
 config.ownerJids=(process.env.WHATSAPP_OWNER_JIDS||'').split(',').map(x=>x.trim()).filter(x=>/^\d+@(s\.whatsapp\.net|lid)$/.test(x));
 config.isOwner=id=>config.ownerJids.includes(id)||(/^\d{8,15}@s\.whatsapp\.net$/.test(id||'')&&config.ownerNumbers.includes(id.split('@')[0]));
 config.getGeminiKey=()=>config.geminiApiKeys[Math.floor(Math.random()*config.geminiApiKeys.length)]||'';
-config.getGeminiModels=()=>config.geminiModels.length?[...config.geminiModels]:[...new Set([config.geminiModel,config.geminiModelFallback,config.geminiModelFallback2,config.geminiModelFallback3,'gemini-3.6-flash','gemini-3.5-flash'].filter(Boolean))];
+config.getGeminiModels = () => (config.geminiModels.length ? config.geminiModels :
+    [...new Set([config.geminiModel, config.geminiModelFallback, config.geminiModelFallback2, config.geminiModelFallback3].filter(Boolean))]
+).slice(0,4);
 config.ffmpegPath=process.env.FFMPEG_PATH||'ffmpeg';
 const ffprobeName = process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe';
 config.ffprobePath = process.env.FFPROBE_PATH ||

@@ -11,8 +11,8 @@ const config = require("../config");
 
 const PHONETIC_DICT = {
     r_pubg: [ /\bpubg\b/gi, "púbiji" ],
-    r_pc: [ /\bpc\b/gi, "pê-cê" ],
-    r_fps: [ /\bfps\b/gi, "éfe-pê-ésse" ],
+    r_pc: [ /\bpc\b/gi, "computador" ],
+    r_fps: [ /\bfps\b/gi, "quadros por segundo" ],
     r_windows: [ /\bwindows\b/gi, "uíndous" ],
     r_app: [ /\bapp\b/gi, "aplicativo" ],
     r_apps: [ /\bapps\b/gi, "aplicativos" ],
@@ -39,24 +39,49 @@ const PHONETIC_DICT = {
     r_bluetooth: [ /\bbluetooth\b/gi, "blutuf" ],
     r_wifi: [ /\bwi-fi\b|\bwifi\b/gi, "uai-fai" ],
     r_bot: [ /\bbot\b/gi, "bót" ],
-    r_ia: [ /\bia\b/gi, "í-á" ],
-    r_dm: [ /\bdm\b/gi, "dê-eme" ],
-    r_dms: [ /\bdms\b/gi, "dê-emes" ]
+    r_ia: [ /\bia\b/gi, "inteligência artificial" ],
+    r_dm: [ /\bdm\b/gi, "mensagem privada" ],
+    r_dms: [ /\bdms\b/gi, "mensagens privadas" ]
+};
+
+const SPOKEN_WORDS = {
+    vc: 'você', vcs: 'vocês', pq: 'porque', q: 'que', tb: 'também', tbm: 'também',
+    blz: 'beleza', vlw: 'valeu', obg: 'obrigado', msg: 'mensagem', msgs: 'mensagens',
+    pf: 'por favor', pfv: 'por favor', hj: 'hoje', td: 'tudo', dps: 'depois',
+    agr: 'agora', mt: 'muito', mto: 'muito', cmg: 'comigo', ctg: 'contigo', ñ: 'não'
 };
 
 function cleanForTts(rawText) {
-    if (!rawText || typeof rawText !== "string") return "";
-    let text = rawText.replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "").replace(/https?:\/\/\S+/gi, "").replace(/[*_~#>-]/g, " ").replace(/\n-# .*$/gm, "").replace(/\p{Extended_Pictographic}/gu, "").replace(/\([^a-zA-Z0-9\s\n]*[^\p{L}\p{N}\s\n,.:;?!'"\-_/][^\n)]*\)/gu, "").replace(/\([^\p{L}\p{N}\s]{1,}\)/gu, "");
-    for (const key of Object.keys(PHONETIC_DICT)) {
-        const [pattern, replacement] = PHONETIC_DICT[key];
+    if (typeof rawText !== 'string') return '';
+    let text = rawText.normalize('NFC')
+        .replace(/^[ \t]*-#[^\n]*/gm, '')
+        .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+        .replace(/`[^`]*`/g, ' ')
+        .replace(/!?\[([^\]\n]+)\]\((?:(?:[^()\n]|\([^()\n]*\))*)\)/g, '$1')
+        .replace(/<(?:@!?|@&|#)\d+>|<a?:\w+:\d+>/g, ' ')
+        .replace(/(?:https?:\/\/|www\.)[^\s<>()\[\]{}]+/giu, ' ')
+        .replace(/[\p{L}\p{N}._%+-]+@(?:[\p{L}\p{N}-]+\.)+[\p{L}]{2,}/gu, ' ')
+        .replace(/(?<![\p{L}\p{N}])(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+[\p{L}]{2,}(?:[/?#][^\s<>()\[\]{}]*)?/gu, ' ')
+        .replace(/[0-9#*]\uFE0F?\u20E3/g, ' ')
+        .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\p{Default_Ignorable_Code_Point}]+/gu, ' ')
+        .replace(/¯\\?_\([^()\n]{1,25}\)_\/¯/gu, ' ')
+        .replace(/[(（][^()（）\n]{1,40}[)）]/gu, fragment =>
+            !/[\p{Script=Latin}\p{N}]/u.test(fragment) && /[\p{S}\p{P}^_]/u.test(fragment.slice(1,-1)) ? ' ' : fragment)
+        .replace(/(?<![\p{L}\p{N}])(?:[:;=][-^']?[)(DPp/|]|[<>^;Tt]_[<>^;Tt]|k{3,}|(?:rs){2,}|xd)(?![\p{L}\p{N}])/giu, ' ')
+        .replace(/^[ \t]*(?:[-+*•>]+|\d+[.)])[ \t]+/gm, '')
+        .replace(/[^\p{L}\p{M}\p{N}\p{Sc}\s.,;:!?"'()/%+°–—-]+/gu, ' ')
+        .replace(/\(\s*\)/g, ' ');
+
+    text = text.replace(/[\p{L}\p{M}\p{N}]+/gu, word => {
+        const replacement = SPOKEN_WORDS[word.toLowerCase()];
+        if (typeof replacement !== 'string') return word;
+        return /^\p{Lu}/u.test(word) ? replacement[0].toUpperCase() + replacement.slice(1) : replacement;
+    });
+    for (const [pattern, replacement] of Object.values(PHONETIC_DICT)) {
         text = text.replace(pattern, replacement);
     }
-    text = text.replace(/,\s*([A-ZÀ-Ú])/g, ". $1");
-    text = text.replace(/[!]+/g, ".");
-    text = text.replace(/[,]{2,}/g, ",");
-    text = text.replace(/\s+/g, " ").trim();
-    text = text.replace(/[.,;: ]+$/, "").trim();
-    return text;
+    text = text.replace(/\s+([,.;:?!])/g, '$1').replace(/([!.?])\1+/g, '$1').replace(/\s+/g, ' ').trim();
+    return /[\p{L}\p{N}]/u.test(text) ? text : '';
 }
 
 async function synthesizeModal(text, options = {}) {
@@ -245,7 +270,7 @@ async function synthesizeVoiceAudio(text, options = {}) {
     logger.voice(`Sintetizando áudio TTS para: "${String(text || '').slice(0, 80)}"`);
     const cleanText = cleanForTts(text);
     if (!cleanText) return null;
-    const wavBuffer = await synthesizeAudio(cleanText, options);
+    const wavBuffer = await synthesizeAudio(text, options);
     if (!wavBuffer) return null;
     const oggBuffer = await convertWavToOggOpus(wavBuffer);
     if (!oggBuffer) return null;

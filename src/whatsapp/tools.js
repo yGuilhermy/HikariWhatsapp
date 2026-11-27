@@ -46,6 +46,12 @@ async function sendMedia(ctx, file, payload) {
     if (payload.audio) ctx.audioSent = true;
 }
 
+async function publishSelection(ctx, tool, text, remember) {
+    if (ctx.deferSelection) ctx.deferSelection(tool, text, remember);
+    else remember(await ctx.send({text}));
+    ctx.toolReplySent = true;
+}
+
 function createToolExecutor(overrides = {}) {
     const service = {
         search: (...a) => require('../handlers/searchManager').searchWeb(...a),
@@ -64,7 +70,7 @@ function createToolExecutor(overrides = {}) {
     const torrentSelections = new Map();
     const musicSelections = new Map();
     let selectionSequence = 0;
-    return async function execute(name, args, ctx) {
+    async function execute(name, args, ctx) {
         ctx.signal?.throwIfAborted();
         validate(name,args);
         if (ctx.onToolStart) await ctx.onToolStart(name);
@@ -93,12 +99,12 @@ function createToolExecutor(overrides = {}) {
             ctx.signal?.throwIfAborted();
             for (const [key,value] of torrentSelections) if(Date.now()-value.at>600000)torrentSelections.delete(key);
             if(!games.length)return {error:'Nenhum torrent encontrado no catálogo local. Tente o nome completo do jogo.'};
-            if(torrentSelections.size>=100)torrentSelections.delete(torrentSelections.keys().next().value);
             const items=games.slice(0,5);
             const line = value => String(value).replace(/[\r\n\t]/g,' ').slice(0,130);
-            const sent = await ctx.send({text:items.map((game,i)=>`${i+1}. ${line(game.title)} — ${line(game.provider)}${game.fileSize ? ` · ${line(game.fileSize)}` : ''}`).join('\n')+`\n\nResponda esta lista com um número ou use ${config.prefix || '>'}torrent 1–${items.length}. Sem resposta direta, vale sua última busca nesta conversa. Validade: 10 minutos.`});
-            torrentSelections.set(++selectionSequence,{scope:selectionKey,messageId:sent?.key?.id,at:Date.now(),items});
-            ctx.toolReplySent=true;
+            await publishSelection(ctx,name,items.map((game,i)=>`${i+1}. ${line(game.title)} — ${line(game.provider)}${game.fileSize ? ` · ${line(game.fileSize)}` : ''}`).join('\n')+`\n\nResponda esta lista com um número ou use ${config.prefix || '>'}torrent 1–${items.length}. Sem resposta direta, vale sua última busca nesta conversa. Validade: 10 minutos.`,sent => {
+                if(torrentSelections.size>=100)torrentSelections.delete(torrentSelections.keys().next().value);
+                torrentSelections.set(++selectionSequence,{scope:selectionKey,messageId:sent?.key?.id,at:Date.now(),items});
+            });
             return {ok:true,message:'Resultados enviados; aguarde a escolha do usuário.'};
         }
         if (name === 'download_game_torrent') {
@@ -193,15 +199,21 @@ function createToolExecutor(overrides = {}) {
                         (item.artist || '') + ' ' + item.title].some(value => normalizedTrack(value) === requested));
                     if (exact.length === 1) track = exact[0];
                     else {
-                        if (musicSelections.size >= 100) musicSelections.delete(musicSelections.keys().next().value);
-                        const lines = tracks.map((item, index) => (index + 1) + '. ' + musicText(item.title) +
+                        const queryWords = new Set(requested.split(' ').filter(word => word.length >= 3));
+                        const options = exact.length ? exact : tracks.filter(item =>
+                            normalizedTrack(item.title + ' ' + (item.artist || '')).split(' ').some(word => queryWords.has(word)));
+                        if (!options.length) return {error:'Não encontrei uma faixa compatível no Deezer. Informe o título ou o artista.'};
+                        const lines = options.map((item, index) => (index + 1) + '. ' + musicText(item.title) +
                             ' — ' + musicText(item.artist || 'Artista desconhecido') +
                             (item.album ? ' (' + musicText(item.album, 80) + ')' : ''));
                         const prefix = config.prefix || '>';
-                        const sent = await ctx.send({ text: lines.join('\n') + '\n\nEscolha com ' + prefix + 'musica #1 a #' + tracks.length + '. Lista válida por 10 minutos.' });
-                        ctx.signal?.throwIfAborted();
-                        musicSelections.set(selectionKey, { tracks, at: Date.now(), messageId: sent?.key?.id });
-                        ctx.toolReplySent = true;
+                        const range = options.length === 1 ? '#1' : '#1 a #' + options.length;
+                        const text = lines.join('\n') + '\n\nResponda com o número ou use ' + prefix + 'musica ' + range +
+                            '. Lista válida por 10 minutos.';
+                        await publishSelection(ctx,name,text,sent => {
+                            if (musicSelections.size >= 100) musicSelections.delete(musicSelections.keys().next().value);
+                            musicSelections.set(selectionKey, {tracks:options, at:Date.now(), messageId:sent?.key?.id});
+                        });
                         return { ok: true, awaitingSelection: true, message: 'Lista enviada. Aguarde a escolha do usuário.' };
                     }
                 }
@@ -227,7 +239,32 @@ function createToolExecutor(overrides = {}) {
             return service.anime(media.buffer,media.mimetype,ctx.signal);
         }
         throw new Error('Ferramenta indisponível.');
+    }
+    execute.resolveQuotedMusic = (message) => {
+        if (!message.isReplyToBot || !message.quotedMessageId) return null;
+        const selection = musicSelections.get(JSON.stringify([message.chatId,message.senderId]));
+        if (!selection || selection.messageId !== message.quotedMessageId || Date.now() - selection.at >= 600000) return null;
+        const choice = normalizedTrack(message.text).replace(/ (?:por favor|pfv|pf)$/u,'');
+        const selectionPrefix = /^(?:(?:manda|mande|envia|envie|baixa|baixe|quero|escolho|pega|pegar|e)\s+)?(?:(?:a|o|numero|faixa|opcao)\s+)*/u;
+        const selectionText = choice.replace(selectionPrefix, '');
+        const ordinal = /^(primeir[oa]|segund[oa]|terceir[oa]|quart[oa]|quint[oa])(?:\s+(.+))?$/u.exec(selectionText);
+        const numeric = /^([1-5])(?:\s+(.+))?$/u.exec(selectionText);
+        const index = numeric ? Number(numeric[1]) - 1 :
+            ['primeiro','segundo','terceiro','quarto','quinto'].indexOf(ordinal?.[1].replace(/a$/,'o'));
+        if (index >= 0) {
+            const track = selection.tracks[index];
+            const title = (numeric?.[2] || ordinal?.[2] || '').replace(/^(?:musica|faixa|opcao)(?: |$)/u,'');
+            const hasTorrentMenu = [...torrentSelections.values()].some(item =>
+                item.scope === JSON.stringify([message.chatId,message.senderId]) && item.messageId === message.quotedMessageId);
+            if (hasTorrentMenu && !title) return 'ambiguous';
+            if (!track || (title && !normalizedTrack(track.title + ' ' + (track.artist || '')).includes(title))) return null;
+            return '#' + (index + 1);
+        }
+        const matched = selection.tracks.map((track,i) => [track,i]).filter(([track]) =>
+            [track.title, track.title + ' ' + (track.artist || '')].some(term => normalizedTrack(term) === choice));
+        return matched.length === 1 ? '#' + (matched[0][1] + 1) : null;
     };
+    return execute;
 }
 
 module.exports = { createToolExecutor, validate };

@@ -48,7 +48,7 @@ Use \`${p}ajuda\` ou \`/ajuda\`. A barra funciona como prefixo alternativo nos c
 
 *🎬 MÍDIA & DOWNLOADS*
 • \`${p}view\` — Reenvia mensagem, imagem, vídeo, áudio ou sticker citado
-• \`${p}musica <nome e artista>\` — Busca faixas no Deezer (áudio MP3 ou arquivo FLAC). Para escolher de uma lista, use \`${p}musica #1\`
+• \`${p}musica <nome e artista>\` — Busca faixas no Deezer (áudio MP3 ou arquivo FLAC). Peça pelo nome e artista. Para escolher, responda à lista com o número ou use \`${p}musica #1\`
 • \`${p}baixar_video <link>\` — Baixa vídeos (Instagram, TikTok, YouTube, X)
 • \`${p}baixar_audio <link>\` — Extrai áudio de vídeos da internet
 • \`${p}buscar_jogo <nome>\` — Busca jogos nos catálogos locais e lista até 5 resultados
@@ -209,7 +209,14 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             if (framingCommand) cmd.name = framingCommand[1];
             const choiceText = String(message.text || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
             const choice = choiceText.match(/^(?:(?:eu\s+)?(?:quero|manda|mande|envia|envie|baixa|baixe|pega|pegue|escolho|seleciona|selecione)\s+)?(?:(?:o|a|numero|opcao|resultado|jogo)\s+)*(\d+|primeiro|primeira|segundo|segunda|terceiro|terceira|quarto|quarta|quinto|quinta)(?:\s+(?:por favor|pfv|pf|pra mim|para mim))?[.!]?$/);
-            if (!cmd.name && message.quotedMessageId && message.isReplyToBot && choice) {
+            const musicChoice = !cmd.name && executeTool.resolveQuotedMusic?.(message);
+            if (musicChoice && musicChoice !== 'ambiguous') {
+                cmd.name = 'musica';
+                cmd.args = musicChoice;
+            }
+            const quotesMusicMenu = message.quotedText?.includes('Lista válida por 10 minutos.') &&
+                /musica #1\b/.test(message.quotedText);
+            if (!cmd.name && message.quotedMessageId && message.isReplyToBot && choice && !quotesMusicMenu) {
                 cmd.name = 'torrent';
                 cmd.args = String(({primeiro:1,primeira:1,segundo:2,segunda:2,terceiro:3,terceira:3,quarto:4,quarta:4,quinto:5,quinta:5})[choice[1]] || choice[1]);
             }
@@ -246,6 +253,10 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                 if (cmd.name === 'fila') return sendText(`Ativa: ${queue.activeCount ?? (queue.active ? 1 : 0)}; aguardando: ${queue.items.length}; pausada: ${queue.paused}.\nFigurinhas: ${stickerQueue.activeCount} ativa(s), ${stickerQueue.items.length} aguardando.`);
             }
             if (queue.paused && !isOwner) return sendText('A Hikari está pausada para manutenção.');
+            if (musicChoice === 'ambiguous') return sendText('Há uma lista de músicas e outra de jogos na mesma mensagem. Use ' + (config.prefix || '>') + 'musica #1 ou ' + (config.prefix || '>') + 'torrent 1 para indicar a lista.');
+            if (!cmd.name && message.isReplyToBot && quotesMusicMenu && (choice || /^#?[1-5](?:\s|$)/u.test(choiceText))) {
+                return sendText('Responda à sua lista válida com o número da faixa ou peça uma nova busca.');
+            }
             if (['ajuda','help'].includes(cmd.name)) {
                 try { return await sendReply({text:getHelpText()}, {help:true}); }
                 catch (error) {

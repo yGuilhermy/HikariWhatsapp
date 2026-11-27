@@ -51,6 +51,7 @@ class ProviderPool {
         try {
             const saved=this.file?JSON.parse(fs.readFileSync(this.file,'utf8')):{};
             if(saved.version===1)for(const [id,state] of Object.entries(saved.entries||{})) {
+                if (id.startsWith('model:gemini:') && ['rate-limit','daily-quota'].includes(state?.kind)) continue;
                 if(state&&state.until>Date.now()&&state.until<=Date.now()+86400000&&typeof state.kind==='string')this.health.set(id,{until:state.until,kind:state.kind,failures:Number(state.failures)||1});
             }
         } catch(error) { if(error.code!=='ENOENT')logger.warn('Cache de disponibilidade IA ignorado; será reconstruído sem credenciais.'); }
@@ -84,11 +85,21 @@ class ProviderPool {
         }
         return null;
     }
+    geminiCandidates() {
+        const keys = unique(config.geminiApiKeys || []);
+        if (!keys.length) return [];
+        const start = (this.cursor.get('gemini') || 0) % keys.length;
+        this.cursor.set('gemini', (start + 1) % keys.length);
+        const models = config.getGeminiModels();
+        const ordered = [...keys.slice(start), ...keys.slice(0,start)];
+        return ordered.flatMap((key,offset) => models.map(model => ({
+            family:'gemini', url:config.geminiUrl, model, key, keySlot:(start+offset)%keys.length+1
+        })));
+    }
     candidates(withTools) {
         const sets={};
         if(config.localLlmEnabled)sets.local=[{family:'local',url:config.localLlmUrl,model:config.localLlmModel,key:config.lmStudioApiKey}];
-        const geminiKeys=unique(config.geminiApiKeys||[]);
-        sets.gemini=config.getGeminiModels().map(model=>({family:'gemini',url:config.geminiUrl,model,key:this.chooseKey('gemini',config.geminiUrl,geminiKeys)})).filter(p=>p.key);
+        sets.gemini=this.geminiCandidates();
         const groqUrl='https://api.groq.com/openai/v1/chat/completions';
         const groqKeys=split(process.env.GROQ_CHAT_ENABLED==='true' ? process.env.GROQ_CHAT_API_KEY : '');
         sets.groq=(config.groqModels||[]).map(model=>({family:'groq',url:groqUrl,model,key:this.chooseKey('groq',groqUrl,groqKeys)})).filter(p=>p.key);
@@ -100,8 +111,10 @@ class ProviderPool {
     }
     markFailure(provider,withTools,error) {
         const info=errorKind(error),ids=scopes(provider,withTools);
+        const pauseModel = info.kind === 'capacity' ||
+            (provider.family !== 'gemini' && ['rate-limit','daily-quota'].includes(info.kind));
         const scope=info.kind==='credential'?ids.credential:info.kind==='tool-support'?ids.tools:
-            ['rate-limit','daily-quota','capacity'].includes(info.kind)?ids.model:ids.pair;
+            pauseModel?ids.model:ids.pair;
         const previous=this.health.get(scope),failures=Math.min(6,(previous?.failures||0)+1);
         const transient=['rate-limit','capacity','network'].includes(info.kind);
         const backoff=transient?Math.min(900000,info.ms*2**(failures-1)):info.ms;
@@ -126,10 +139,10 @@ class ProviderPool {
             if(attempts>=maxAttempts||Date.now()>=deadline)break;
             const held=this.remaining(provider,withTools);
             if(held){earliest=Math.min(earliest,held);continue;}
-            const budgetKey=provider.family==='gemini'?'gemini:'+provider.model:provider.family;
+            const identity=scopes(provider,withTools).pair;
+            const budgetKey=provider.family==='gemini'?identity:provider.family;
             const count=attemptsByFamily.get(budgetKey)||0;
             if(count>=config.llmMaxProviderAttempts)continue;
-            const identity=scopes(provider,withTools).pair;
             if(this.inflight.has(identity))continue;
             attempts++;attemptsByFamily.set(budgetKey,count+1);this.inflight.add(identity);
             const request={...payload,model:provider.model};
@@ -139,7 +152,7 @@ class ProviderPool {
             if(provider.family==='groq'&&/qwen\//.test(provider.model)){request.reasoning_effort='none';request.reasoning_format='hidden';}
             const timeout=Math.max(1,Math.min(config.llmTimeout,config.llmAttemptTimeout,deadline-Date.now()));
             try {
-                logger.event('ai', 'api', `IA tentativa ${attempts}/${config.llmMaxAttempts}: ${provider.family}/${safeModel(provider.model)} (até ${Math.ceil(timeout/1000)}s).`);
+                logger.event('ai', 'api', `IA tentativa ${attempts}/${config.llmMaxAttempts}: ${provider.family}/${safeModel(provider.model)}${provider.keySlot ? ' · chave '+provider.keySlot : ''} (até ${Math.ceil(timeout/1000)}s).`);
                 const response=await axios.post(provider.url,request,{headers:{'Content-Type':'application/json',...(provider.key?{Authorization:`Bearer ${provider.key}`}:{})},timeout,signal});
                 signal?.throwIfAborted();
                 const message=response.data?.choices?.[0]?.message;
@@ -147,7 +160,9 @@ class ProviderPool {
                 if (!result) {
                     if (!retriedEmptyResponses.has(identity) && attempts < maxAttempts && count + 1 < config.llmMaxProviderAttempts) {
                         retriedEmptyResponses.add(identity);
-                        providers.push(provider);
+                        const firstOtherProvider = provider.family === 'gemini' ? providers.findIndex(candidate => candidate.family !== 'gemini') : -1;
+                        if (firstOtherProvider < 0) providers.push(provider);
+                        else providers.splice(firstOtherProvider,0,provider);
                         continue;
                     }
                     throw Object.assign(new Error('Resposta sem conteúdo final.'),{code:'EMPTY_RESPONSE'});
@@ -165,15 +180,13 @@ class ProviderPool {
         throw Object.assign(new Error(`Estou sem um modelo de IA disponível agora. Tente novamente em cerca de ${seconds<60?seconds+' segundos':Math.ceil(seconds/60)+' minuto(s)'}.`),{code:'AI_UNAVAILABLE',retryAfterMs:seconds*1000});
     }
     async generateGemini(payload,signal) {
-        const deadline=Date.now()+Math.max(config.llmCompletionBudget,config.getGeminiModels().length*config.llmAttemptTimeout);
-        let attempts=0;
-        for(const model of config.getGeminiModels()) {
+        const deadline = Date.now() + config.llmCompletionBudget;
+        let attempts = 0;
+        for (const provider of this.geminiCandidates()) {
             signal?.throwIfAborted();
-            const key=this.chooseKey('gemini',config.geminiUrl,config.geminiApiKeys);
-            if(!key)break;
-            const provider={family:'gemini',model,key,url:config.geminiUrl};
-            if(this.remaining(provider,false))continue;
-            if(Date.now()>=deadline)break;
+            if (attempts >= config.llmMaxAttempts || Date.now() >= deadline) break;
+            if (this.remaining(provider,false)) continue;
+            const {model,key} = provider;
             const identity=scopes(provider,false).pair;
             if(this.inflight.has(identity))continue;
             this.inflight.add(identity);attempts++;

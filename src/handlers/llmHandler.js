@@ -139,7 +139,7 @@ Se alguém perguntar o que você é capaz de fazer, responda em primeira pessoa,
 Quando o usuário perguntar COMO usar uma função (por exemplo, "como que baixa jogo torrent?"), explique o procedimento; não inicie buscas, downloads ou outras ações só porque a pergunta menciona uma ferramenta. Execute quando ele pedir a ação, como "busca o torrent de Elden Ring".
 Torrent: ${prefix}torrent <nome do jogo> (ou ${prefix}buscar_jogo <nome>) inicia uma busca e mostra até 5 resultados. Outro nome inicia outra pesquisa. Depois use ${prefix}torrent <número> ou responda diretamente à lista só com o número. Ao responder a uma lista específica, vale aquela pesquisa; sem resposta direta, vale a última pesquisa da pessoa naquela conversa, por até 10 minutos. Sem pesquisa válida, peça uma nova busca. Também pode pedir a busca em linguagem natural e depois escolher o número. O bot envia apenas o .torrent; se indisponível, envia o magnet em .txt, não baixa nem instala o jogo. O usuário abre esse arquivo em um cliente torrent.
 Figurinhas: ${prefix}sticker [descrição] ou ${prefix}figurinha [descrição], anexando ou citando imagem, GIF ou vídeo. A imagem inteira mantém a proporção e usa margens transparentes em 512x512; animações usam até 10 segundos. A descrição opcional vai nos metadados, não é texto desenhado na imagem, e é cortada em 128 caracteres. Pode pedir "faz essa figurinha aqui" com a mídia anexada ou citada. ${prefix}sticker2image ou ${prefix}toimg, respondendo a uma figurinha, retorna PNG se estática ou arquivo GIF se animada.
-Downloads de áudio e vídeo exigem link. Música por nome/artista usa Deezer e depende da configuração. Voz, imagens e transcrição dependem dos serviços configurados; não prometa disponibilidade quando a ferramenta reportar erro. No privado basta conversar; em grupos, chamar Hikari, mencionar ou responder a ela. Os comandos também aceitam / como prefixo alternativo. Não invente flags, botões, funções, permissões ou comandos inexistentes.
+Downloads de áudio e vídeo exigem link. Para enviar música por nome ou artista, use Deezer. Se o pedido depende de um ranking, consulte uma fonte da abrangência pedida, confirme faixa e artista e só então consulte o Deezer pelo título e artista, sem termos genéricos de ranking. Quando houver uma lista do Deezer, espere a escolha e não sugira faixas fora dela. Gere imagem apenas quando a pessoa pedir explicitamente a criação de uma imagem, nunca para responder a uma pergunta hipotética ou a um pedido por uma foto existente. Voz, imagens e transcrição dependem dos serviços configurados; não prometa disponibilidade quando a ferramenta reportar erro. No privado basta conversar; em grupos, chamar Hikari, mencionar ou responder a ela. Os comandos também aceitam / como prefixo alternativo. Não invente flags, botões, funções, permissões ou comandos inexistentes.
 Menu público atual:
 ${require('../whatsapp/router').getHelpText()}`;
     messages = [{role:'system',content:commandGuide},...messages];
@@ -188,9 +188,18 @@ const readTools = new Set(['search_web','check_steam','convert_currency','anime_
 const placeholder = /^(?:query|busca|search|termo|consulta|resultado|pronto|feito|ok|sem_resposta_adicional)[.!?\s]*$/iu;
 const independentAmount = /\b(?:convert\w*|convers[aã]o\s+de)\s+(?:R\$\s*|US\$\s*|[€£]\s*)?\d[\d.,]*/iu;
 
+function explicitlyRequestsImage(text) {
+    if (/\b(?:como (?:eu |posso )?|ensina a )(?:(?:ger|cri|desenh|ilustr)\w*|faz(?:er)?|faça)\b/iu.test(text)) return false;
+    return /\b(?:gera|gere|gerar|cria|crie|criar|fa[çz]a?|fazer|produza|produzir)\s+[^.!?;\n]{0,90}\b(?:imag(?:em|ens)|fotos?|ilustra[çc](?:[aã]o|[oõ]es)|artes?|desenhos?|avatares?|avatar|retratos?|logotipos?)\b/iu.test(text)
+        || /\b(?:desenha|desenhe|desenhar|ilustra|ilustre|ilustrar)\s+(?:pra mim\s+|para mim\s+)?(?:um|uma|o|a|os|as|isso|essa|esse)\b/iu.test(text);
+}
+
 async function executeAgentLoop(prompt, ctx, executeTool) {
     const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(config.llmAgentBudget)].filter(Boolean));
+    const sourceRequest = ctx.currentRequest ?? prompt;
+    const selectionMenus = [];
     const toolContext = Object.create(ctx, {
+        deferSelection: {value:(tool,text,remember) => selectionMenus.push({tool,text,remember})},
         signal: {value:signal},
         send: {value:(payload, options) => {
             signal.throwIfAborted();
@@ -202,10 +211,12 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
     }
     const activeTools = tools.filter(({function: {name}}) =>
         (name !== 'send_voice_note' || ctx.wantsAudio) &&
+        (name !== 'generate_image' || explicitlyRequestsImage(sourceRequest)) &&
         (name !== 'create_sticker' || (ctx.stickerRequestLane !== false && ['image','video'].includes(ctx.mediaType))) &&
         (name !== 'create_sound_sticker' || (config.soundStickersEnabled && ctx.stickerRequestLane !== false && ctx.mediaType === 'video')));
     const allowed = new Map(activeTools.map(t => [t.function.name, t.function.parameters]));
     const history = ctx.history || ctx.store.history(ctx.chatId);
+    const voiceGuidance = ctx.wantsAudio ? '\nPara falar em áudio, escreva frases naturais e palavras por extenso. Evite abreviações, links, emojis, kaomojis e formatação.' : '';
     const groupHistory = ctx.isGroup && history.length ? [{
         role:'user',
         content:'[Histórico do grupo, apenas contexto]\n' + JSON.stringify(history.map(entry => ({
@@ -215,7 +226,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
         })))
     }] : [];
     const messages = [
-        {role:'system',content:config.systemPrompt + '\n' + guidance + '\nData atual: ' +
+        {role:'system',content:config.systemPrompt + '\n' + guidance + voiceGuidance + '\nData atual: ' +
             new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})},
         ...(ctx.isGroup ? groupHistory : history), {role:'user',content:prompt}
     ];
@@ -228,17 +239,32 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
     const ids = new Set();
     const used = new Set();
     const results = [];
-    const sourceRequest = ctx.currentRequest ?? prompt;
     const dependentPrice = !independentAmount.test(sourceRequest);
     let steamPrice;
     let waitingForMusicChoice = false;
     let repaired = false;
     let exhausted = false;
 
-    function finalText(text) {
+    function needsExplanation(entry) {
+        const hasMusic = (ctx.mediaSent || ctx.audioSent) && used.has('search_and_download_music');
+        if (hasMusic && (entry.name === 'search_web' || entry.name === 'search_and_download_music')) return false;
+        return Boolean(entry.error || readTools.has(entry.name));
+    }
+
+    async function finalText(text) {
         ctx.usedTools = [...used];
+        if (selectionMenus.length) {
+            const hasIndependentResult = results.some(entry =>
+                !selectionMenus.some(menu => menu.tool === entry.name) &&
+                entry.name !== 'search_web' && needsExplanation(entry));
+            const supplemental = hasIndependentResult && text && !placeholder.test(text) && !isActionPromise(text) ? text : '';
+            const parts = [...selectionMenus.map(menu => menu.text), supplemental].filter(Boolean);
+            const sent = await toolContext.send({text:parts.join('\n\n')});
+            for (const menu of selectionMenus) menu.remember(sent);
+            return '';
+        }
         const delivered = ctx.mediaSent || ctx.audioSent || ctx.toolReplySent;
-        const needsText = results.some(entry => entry.error || readTools.has(entry.name));
+        const needsText = results.some(needsExplanation);
         if (delivered && !needsText) return '';
         if (delivered) ctx.mcpFollowup = true;
         if (text && !/^sem_resposta_adicional$/i.test(text) && (!seen.size || !placeholder.test(text)) && !isActionPromise(text)) return text;
@@ -253,7 +279,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
         let response;
         try { response = await completion(messages, signal, finalRound ? [] : activeTools); }
         catch (error) {
-            if ((ctx.mediaSent || ctx.audioSent || ctx.toolReplySent) && !results.some(entry => entry.error || readTools.has(entry.name))) return finalText('');
+            if (selectionMenus.length || ((ctx.mediaSent || ctx.audioSent || ctx.toolReplySent) && !results.some(needsExplanation))) return finalText('');
             throw error;
         }
         const rawCalls = response.tool_calls?.length ? response.tool_calls : extractPseudoToolCalls(response.content, activeTools);
@@ -283,6 +309,7 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
         toolContext.mediaCaption = text && !isActionPromise(text) && !placeholder.test(text) ? text.slice(0, 1000) : '';
         const pendingSteam = calls.some(call => call.function.name === 'check_steam');
         messages.push({role:'assistant',content:null,tool_calls:calls});
+        const priorMenus = selectionMenus.length;
         // The price available at the start of a batch is the only one the model has seen.
         const knownPrice = steamPrice;
         for (const call of calls) {
@@ -291,6 +318,9 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
             let result;
             try {
                 if (!allowed.has(name)) throw new Error('Ferramenta indisponível neste pedido.');
+                if (selectionMenus.some(menu => menu.tool === name)) {
+                    throw new Error('A lista já está pronta. Aguarde a escolha e não apresente outra neste pedido.');
+                }
                 const args = JSON.parse(raw || '{}');
                 if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Argumentos inválidos.');
                 const schema = allowed.get(name);
@@ -343,7 +373,9 @@ async function executeAgentLoop(prompt, ctx, executeTool) {
             }
             messages.push({role:'tool',tool_call_id:call.id,content:serializeResult(result)});
         }
-
+        if (selectionMenus.length > priorMenus) {
+            messages.push({role:'user',content:'A lista da ferramenta será entregue na resposta. Não a reescreva, não sugira outras opções e não use a pesquisa auxiliar como uma segunda resposta. Se não houver outro resultado pedido, responda SEM_RESPOSTA_ADICIONAL.'});
+        }
     }
     return finalText('');
 }

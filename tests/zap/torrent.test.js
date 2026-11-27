@@ -48,11 +48,16 @@ test('busca pela IA envia somente a lista sem uma segunda resposta',async t=>{
     const original=axios.post,local=config.localLlmEnabled;
     t.after(()=>{axios.post=original;config.localLlmEnabled=local;});config.localLlmEnabled=true;
     let calls=0;
-    axios.post=async()=>{calls++;return {data:{choices:[{message:{content:null,tool_calls:[{id:'game1',type:'function',function:{name:'search_game',arguments:'{"game_name":"Teste"}'}}]}}]}};};
+    axios.post=async()=>{
+        const message = ++calls === 1
+            ? {content:null,tool_calls:[{id:'game1',type:'function',function:{name:'search_game',arguments:'{"game_name":"Teste"}'}}]}
+            : {content:'sem_resposta_adicional'};
+        return {data:{choices:[{message}]}};
+    };
     const execute=createToolExecutor({searchGames:async()=>[game]});
     const sent=[];const ctx={chatId:'group',senderId:'alice',history:[],send:async payload=>sent.push(payload)};
     assert.equal(await executeAgentLoop('busque Teste',ctx,execute),'');
-    assert.equal(calls,1);assert.equal(sent.length,1);
+    assert.equal(calls,2);assert.equal(sent.length,1);
 });
 
 test('comandos do WhatsApp enviam uma lista e um documento, sem textos duplicados',async()=>{
