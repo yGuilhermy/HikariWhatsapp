@@ -42,9 +42,9 @@ class Store {
     ban(id,reason) { this.state.banned[id] = {reason:String(reason).slice(0,500),at:Date.now()}; this.save(); }
     unban(id) { delete this.state.banned[id]; this.save(); }
     history(chat) { return (this.state.history[chat] || []).slice(-config.maxHistory); }
-    addHistory(chat,role,content) {
+    addHistory(chat,role,content,senderRef) {
         if (!config.saveHistory) return;
-        this.state.history[chat] = [...this.history(chat),{role,content:String(content).slice(0,8000)}].slice(-config.maxHistory);
+        this.state.history[chat] = [...this.history(chat),{role,content:String(content).slice(0,8000),...(senderRef ? {senderRef} : {})}].slice(-config.maxHistory);
         this.save();
     }
     clearHistory(chat) { delete this.state.history[chat]; this.save(); }

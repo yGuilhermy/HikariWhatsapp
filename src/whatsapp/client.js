@@ -79,7 +79,7 @@ function normalizeIncoming(raw, normalizeMessageContent, {botJids = [], sentMess
         isBotMentioned:(textNode.contextInfo?.mentionedJid || []).some(isBot),
         isReplyToBot, quotedAuthor: quoted ? quotedAuthor : undefined,
         text:content.conversation || textNode.text || textNode.caption || '',
-        hasMedia:Boolean(mediaType),mediaType,mediaNode:mediaContent[`${mediaType}Message`],
+        hasMedia:Boolean(mediaType),mediaType,mediaFromQuote:Boolean(!currentType && mediaType),mediaNode:mediaContent[`${mediaType}Message`],
         quotedMessageId:quoted ? context.stanzaId : undefined,
         quotedText:quotedContent.conversation || quotedContent.extendedTextMessage?.text || ''};
 }

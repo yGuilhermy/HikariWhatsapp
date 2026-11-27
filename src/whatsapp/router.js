@@ -1,3 +1,4 @@
+const { createHash } = require('node:crypto');
 const config = require('../config');
 const { createBotNameMatcher } = require('../utils/botNameMatcher');
 const matchesBotName = createBotNameMatcher(config.botName || 'Hikari', process.env.WHATSAPP_BOT_ALIASES ?? 'hik', 'Hikari');
@@ -216,12 +217,16 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
             const isDotVoice = !cmd.name && /^\.(?!\.)\s*\S+/.test(rawText.trim());
             const explicitVoice = /(?:respond[ae]|resposta|mand[ae]|envi[ae]).{0,30}(?:em [aá]udio|por voz|nota de voz|[uú]m [aá]udio)/iu.test(rawText);
             const wantsAudio = Boolean(isDotVoice || cmd.name === 'audio' || explicitVoice);
-            const recordText = text => message.isGroup ? `${JSON.stringify(message.senderName || 'Participante')}: ${text}` : text;
+            const senderRef = message.isGroup
+                ? createHash('sha256').update(message.chatId + ':' + senderId).digest('hex').slice(0,16) : undefined;
+            const recordUser = text => store.addHistory(message.chatId,'user',text,senderRef);
+            const isAcknowledgment = message.isReplyToBot && !cmd.name && (!message.hasMedia || message.mediaFromQuote)
+                && /^(?:amo+|amei+|adorei+|valeu+|obrigad[oa]+|t[áa]\s+bom|beleza|ok+|kkk+)[\s\p{P}\p{S}]*$/iu.test(rawText.trim());
             const stickerRequest = message.hasMedia && /\b(?:fa[zç]a?|cria?r?|transforma?r?|converte?r?)\b[\s\S]{0,100}\b(?:figurinha|sticker|adesivo)\b/iu.test(message.text || '');
             const addressed = !message.isGroup || Boolean(cmd.name || stickerRequest || message.isBotMentioned || message.isReplyToBot || matchesBotName(rawText));
             if (!addressed) {
                 logger.zap(`Mensagem em grupo ignorada (não direcionada à Hikari) de "${message.senderName}": "${(message.text || '').slice(0, 80)}"`);
-                if (!queue.paused && message.text) store.addHistory(message.chatId,'user',recordText(message.text));
+                if (!queue.paused && message.text) recordUser(message.text);
                 return;
             }
             logger.event('zap', 'queued', `Mensagem direcionada à Hikari de "${message.senderName}" no chat ${message.chatId}. Enfileirando...`);
@@ -291,7 +296,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                         }
                     };
                     try {
-                        const ctx = {...message,store,isOwner,stickerRequestLane,signal,senderId,wantsAudio,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
+                        const ctx = {...message,store,isOwner,stickerRequestLane,signal,senderId,senderRef,wantsAudio,allowTools:!isAcknowledgment,mediaSent:false,audioSent:false,onToolStart:markReact,getMedia:() => hold(() => message.getMedia(signal)),history:store.history(message.chatId).slice(-(config.maxHistory-1)).map(x => ({...x})),send:async (payload, options = {}) => {
                             signal.throwIfAborted();
                             const isMedia = Boolean(payload.audio || payload.image || payload.video || payload.document || payload.sticker);
                             const send = () => sendReply(payload, { ...options, stickerDelivery: Boolean(options.stickerDelivery || payload.sticker || (stickerRequestLane && isMedia)), signal: options.signal || signal });
@@ -304,6 +309,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                         }};
                         signal.throwIfAborted();
                         const execute = (name, args, context) => {
+                            if (!ctx.allowTools) return {error:'A mensagem atual é apenas uma reação à conversa.'};
                             if (MEDIA_DOWNLOADS.has(name)) mediaAttempted = true;
                             if (STICKER_TOOLS.has(name) && !stickerRequestLane) {
                                 return {error:'Para usar a fila de figurinhas, peça uma figurinha junto da mídia anexada ou citada.'};
@@ -316,7 +322,7 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                             store.clearHistory(message.chatId);
                             return message.react?.('\ud83e\uddf9');
                         }
-                        store.addHistory(message.chatId,'user',recordText(message.text || '[Anexo recebido]'));
+                        recordUser(message.text || '[Anexo recebido]');
                         if (cmd.name) logger.event('command', 'command', `Executando comando "${config.prefix || '>'}${cmd.name}" de "${message.senderName}" | args: "${cmd.args}"`);
                         let result;
                         switch (cmd.name) {
@@ -410,7 +416,11 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 result = await tool('convert_currency',{amount:Number(match[1].replace(',','.')),from:match[2].toUpperCase(),to:match[3].toUpperCase()}); break;
                             }
                             default: {
-                                const media = message.hasMedia ? await ctx.getMedia() : null;
+                                const wantsQuotedAudio = cmd.name === 'transcrever' ||
+                                    /\b(?:transcrev\w*|transcri\w*|[áa]udio|grava[çc][aã]o|dito|disse|falou|resum\w*)\b/iu.test(rawText);
+                                const skipQuotedAudio = message.mediaFromQuote && message.mediaType === 'audio' &&
+                                    Boolean(rawText.trim()) && !wantsQuotedAudio;
+                                const media = message.hasMedia && !skipQuotedAudio ? await ctx.getMedia() : null;
                                 if (media) await markReact();
                                 let prompt = ['audio','ia_chat'].includes(cmd.name) ? cmd.args : (isDotVoice ? rawText.trim().replace(/^\.\s*/, '') : message.text || '');
                                 ctx.currentRequest = prompt;
@@ -429,7 +439,13 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                     }
                                     prompt += '\n[Visão computacional desativada. A mídia não foi analisada. Responda apenas com base no texto e avise se a análise visual for necessária.]';
                                 }
-                                else if (media?.type === 'audio') prompt += `\n[Transcrição do áudio recebido]\n${await hold(() => transcribe(media,signal))}`;
+                                else if (media?.type === 'audio') {
+                                    const transcript = await hold(() => transcribe(media,signal));
+                                    if (!message.mediaFromQuote && !ctx.currentRequest.trim()) ctx.currentRequest = transcript;
+                                    prompt += message.mediaFromQuote
+                                        ? '\n[Transcrição da mídia citada, apenas contexto]\n' + JSON.stringify(transcript)
+                                        : '\n[Transcrição do áudio do pedido atual]\n' + JSON.stringify(transcript);
+                                }
                                 else if (media?.type === 'sticker') {
                                     const sharp = require('sharp');
                                     const buffer = await sharp(media.buffer,{page:0,pages:1,limitInputPixels:40000000}).png().toBuffer();
@@ -444,7 +460,11 @@ function createRouter({store, queue = new Queue(config.maxQueue,queueOptions()),
                                 else if (media) throw new Error('Para conversar, envie texto, imagem ou áudio.');
                                 if (!prompt.trim()) throw new Error('Envie uma pergunta ou um anexo.');
                                 signal.throwIfAborted();
-                                const currentPrompt = message.isGroup ? `[Pedido atual de ${JSON.stringify(message.senderName || 'Participante')}]\n${prompt}` : prompt;
+                                const currentPrompt = message.isGroup
+                                    ? '[Remetente autenticado do pedido atual]\n' + JSON.stringify({
+                                        nome:message.senderName || 'Participante', papel:isOwner ? 'dono do bot' : 'participante'
+                                    }) + '\n[Mensagem atual]\n' + prompt
+                                    : prompt;
                                 logger.ai(`Disparando agente para "${message.senderName}" no chat ${message.chatId} | Prompt: "${prompt}"`);
                                 result = await agent(currentPrompt,ctx,execute);
                                 if (isDotVoice || cmd.name === 'audio') {

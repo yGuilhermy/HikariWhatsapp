@@ -202,7 +202,7 @@ function createToolExecutor(overrides = {}) {
                         ctx.signal?.throwIfAborted();
                         musicSelections.set(selectionKey, { tracks, at: Date.now(), messageId: sent?.key?.id });
                         ctx.toolReplySent = true;
-                        return { ok: true, message: 'Lista enviada. Aguarde a escolha do usuário.' };
+                        return { ok: true, awaitingSelection: true, message: 'Lista enviada. Aguarde a escolha do usuário.' };
                     }
                 }
             }
